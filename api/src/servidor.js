@@ -186,25 +186,49 @@ function criarServidor(banco) {
       return res.status(403).json({ erro: 'NAO_INSCRITO', mensagem: 'Participante não possui inscrição confirmada nesta atividade' });
     }
 
-    // R3 / R10 item 5: Janela para registro de presença online [inicio - 15min, inicio + 30min]
     const agora = relogio.agora();
     const agoraMs = new Date(agora).getTime();
     const inicioMs = new Date(encontro.inicio).getTime();
 
+    const { codigo, lidoEm } = req.body || {};
+
+    const fimMs = new Date(encontro.fim).getTime();
+    const limiteSincronizacaoMs = fimMs + 2 * 60 * 60 * 1000;
+
+    // R10 item 4 / R6: Sincronização offline recebida mais de 2 horas após o fim do encontro
+    if (lidoEm && agoraMs > limiteSincronizacaoMs) {
+      return res.status(422).json({ erro: 'SINCRONIZACAO_TARDIA', mensagem: 'Sincronização recebida após o prazo limite de 2 horas' });
+    }
+
+    const origem = lidoEm ? 'qr_offline' : 'qr';
+    let instanteAvaliadoMs = agoraMs;
+    let lidoEmFinal = agora;
+
+    if (lidoEm) {
+      const lidoEmMs = new Date(lidoEm).getTime();
+      if (lidoEmMs > agoraMs) {
+        instanteAvaliadoMs = agoraMs;
+        lidoEmFinal = agora;
+      } else {
+        instanteAvaliadoMs = lidoEmMs;
+        lidoEmFinal = lidoEm;
+      }
+    }
+
+    // R3 / R10 item 5: Janela para registro de presença [inicio - 15min, inicio + 30min]
     const janelaInicioMs = inicioMs - 15 * 60 * 1000;
     const janelaFimMs = inicioMs + 30 * 60 * 1000;
 
-    if (agoraMs < janelaInicioMs || agoraMs > janelaFimMs) {
+    if (instanteAvaliadoMs < janelaInicioMs || instanteAvaliadoMs > janelaFimMs) {
       return res.status(422).json({ erro: 'FORA_DA_JANELA', mensagem: 'Registro de presença fora da janela permitida' });
     }
 
-    const { codigo } = req.body || {};
     if (!codigo || typeof codigo !== 'string' || codigo.length !== 6) {
       return res.status(422).json({ erro: 'DADOS_INVALIDOS', mensagem: 'Código inválido ou ausente' });
     }
 
     // R2 / R10 item 6: Validação do código QR (minuto atual ou grace period de 1 min)
-    const baldeAtual = obterBaldeMinuto(agoraMs);
+    const baldeAtual = obterBaldeMinuto(instanteAvaliadoMs);
     const codigoAtual = gerarCodigo(encontro.id, baldeAtual);
     const codigoAnterior = gerarCodigo(encontro.id, baldeAtual - 1);
 
@@ -215,8 +239,8 @@ function criarServidor(banco) {
     const presencaId = gerarId('pre');
     db.prepare(`
       INSERT INTO presencas (id, encontroId, participanteId, origem, lidoEm, registradaEm, justificativa)
-      VALUES (?, ?, ?, 'qr', ?, ?, NULL)
-    `).run(presencaId, encontro.id, req.usuario.id, agora, agora);
+      VALUES (?, ?, ?, ?, ?, ?, NULL)
+    `).run(presencaId, encontro.id, req.usuario.id, origem, lidoEmFinal, agora);
 
     const presencaCriada = db.prepare('SELECT * FROM presencas WHERE id = ?').get(presencaId);
     res.status(201).json(presencaCriada);
