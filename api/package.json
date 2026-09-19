@@ -1,0 +1,12 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test verificacoes/**/*.spec.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
