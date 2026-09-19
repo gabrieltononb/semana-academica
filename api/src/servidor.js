@@ -246,6 +246,86 @@ function criarServidor(banco) {
     res.status(201).json(presencaCriada);
   });
 
+  // POST /encontros/:id/presencas/manual (Fatia 4: R7, R8, R9, R4, R5, R11, R13)
+  app.post('/encontros/:id/presencas/manual', (req, res) => {
+    if (req.usuario.papel !== 'organizacao') {
+      return res.status(403).json({ erro: 'SOMENTE_ORGANIZACAO', mensagem: 'Apenas organização pode registrar presença manual' });
+    }
+
+    const encontro = db.prepare('SELECT * FROM encontros WHERE id = ?').get(req.params.id);
+    if (!encontro) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Encontro não encontrado' });
+    }
+
+    const { participanteId, justificativa } = req.body || {};
+
+    // R11 item 1 / R8: Justificativa ausente ou com menos de 10 caracteres após trim
+    if (!justificativa || typeof justificativa !== 'string' || justificativa.trim().length < 10) {
+      return res.status(422).json({ erro: 'JUSTIFICATIVA_OBRIGATORIA', mensagem: 'Justificativa é obrigatória e deve conter no mínimo 10 caracteres' });
+    }
+
+    // R11 item 2 / R5: Idempotência - Presença já existente para o participante no encontro
+    const presencaExistente = db.prepare(`
+      SELECT * FROM presencas 
+      WHERE encontroId = ? AND participanteId = ?
+    `).get(encontro.id, participanteId);
+
+    if (presencaExistente) {
+      return res.status(200).json(presencaExistente);
+    }
+
+    // R11 item 3 / R4: Exigência de inscrição confirmada
+    const inscricao = db.prepare(`
+      SELECT * FROM inscricoes 
+      WHERE atividadeId = ? AND participanteId = ?
+    `).get(encontro.atividadeId, participanteId);
+
+    if (!inscricao || inscricao.status !== 'confirmada') {
+      return res.status(403).json({ erro: 'NAO_INSCRITO', mensagem: 'Participante não possui inscrição confirmada nesta atividade' });
+    }
+
+    const agora = relogio.agora();
+    const agoraMs = new Date(agora).getTime();
+    const inicioMs = new Date(encontro.inicio).getTime();
+    const fimMs = new Date(encontro.fim).getTime();
+
+    // R11 item 4 / R7: Horário da requisição fora da janela estendida [inicio - 15min, fim + 2h]
+    const janelaInicioMs = inicioMs - 15 * 60 * 1000;
+    const janelaFimMs = fimMs + 2 * 60 * 60 * 1000;
+
+    if (agoraMs < janelaInicioMs || agoraMs > janelaFimMs) {
+      return res.status(422).json({ erro: 'FORA_DA_JANELA', mensagem: 'Registro manual fora da janela permitida' });
+    }
+
+    // R11 item 5 / R9: Teto percentual de presenças manuais por encontro (10% arredondado para cima)
+    const { totalConfirmadas } = db.prepare(`
+      SELECT COUNT(*) as totalConfirmadas 
+      FROM inscricoes 
+      WHERE atividadeId = ? AND status = 'confirmada'
+    `).get(encontro.atividadeId);
+
+    const tetoManuais = Math.ceil(totalConfirmadas * 0.1);
+
+    const { totalManuais } = db.prepare(`
+      SELECT COUNT(*) as totalManuais 
+      FROM presencas 
+      WHERE encontroId = ? AND origem = 'manual'
+    `).get(encontro.id);
+
+    if (totalManuais >= tetoManuais) {
+      return res.status(422).json({ erro: 'LIMITE_DE_MANUAIS', mensagem: 'Limite de presenças manuais atingido para este encontro' });
+    }
+
+    const presencaId = gerarId('pre');
+    db.prepare(`
+      INSERT INTO presencas (id, encontroId, participanteId, origem, lidoEm, registradaEm, justificativa)
+      VALUES (?, ?, ?, 'manual', ?, ?, ?)
+    `).run(presencaId, encontro.id, participanteId, agora, agora, justificativa);
+
+    const presencaCriada = db.prepare('SELECT * FROM presencas WHERE id = ?').get(presencaId);
+    res.status(201).json(presencaCriada);
+  });
+
   return app;
 }
 
