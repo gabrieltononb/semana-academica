@@ -326,6 +326,27 @@ function criarServidor(banco) {
     res.status(201).json(presencaCriada);
   });
 
+  // GET /encontros/:id/presencas (Fatia 5: R12, R13)
+  app.get('/encontros/:id/presencas', (req, res) => {
+    if (req.usuario.papel !== 'organizacao') {
+      return res.status(403).json({ erro: 'SOMENTE_ORGANIZACAO', mensagem: 'Apenas a organização pode consultar a lista de presenças' });
+    }
+
+    const encontro = db.prepare('SELECT * FROM encontros WHERE id = ?').get(req.params.id);
+    if (!encontro) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Encontro não encontrado' });
+    }
+
+    const presencas = db.prepare('SELECT * FROM presencas WHERE encontroId = ?').all(encontro.id);
+    presencas.sort((a, b) => {
+      const diff = new Date(a.registradaEm).getTime() - new Date(b.registradaEm).getTime();
+      if (diff !== 0) return diff;
+      return a.participanteId.localeCompare(b.participanteId);
+    });
+
+    res.json(presencas);
+  });
+
   return app;
 }
 
