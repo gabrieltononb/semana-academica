@@ -2,7 +2,7 @@ const express = require('express');
 const crypto = require('node:crypto');
 const { criarBanco, carregarDadosIniciais } = require('./db.js');
 const { relogio } = require('./relogio.js');
-const { calcularCodigoDoEncontro } = require('./codigo-qr.js');
+const { calcularCodigoDoEncontro, gerarCodigo, obterBaldeMinuto } = require('./codigo-qr.js');
 
 function gerarId(prefixo) {
   return `${prefixo}_${crypto.randomBytes(4).toString('hex')}`;
@@ -40,6 +40,16 @@ function criarServidor(banco) {
 
     app.get('/_teste/relogio', (req, res) => {
       res.json({ agora: relogio.agora() });
+    });
+
+    app.post('/_teste/inscricoes', (req, res) => {
+      const { atividadeId, participanteId, status = 'confirmada' } = req.body || {};
+      const id = gerarId('ins');
+      db.prepare(`
+        INSERT INTO inscricoes (id, atividadeId, participanteId, status, criadaEm)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, atividadeId, participanteId, status, relogio.agora());
+      res.status(201).json({ id, atividadeId, participanteId, status });
     });
   }
 
@@ -143,6 +153,73 @@ function criarServidor(banco) {
 
     const codigoDoEncontro = calcularCodigoDoEncontro(encontro.id, agora);
     res.json(codigoDoEncontro);
+  });
+
+  // POST /encontros/:id/presencas (Fatia 2: R2, R3, R4, R5, R10, R13)
+  app.post('/encontros/:id/presencas', (req, res) => {
+    if (req.usuario.papel !== 'participante') {
+      return res.status(403).json({ erro: 'SOMENTE_PARTICIPANTE', mensagem: 'Apenas participantes podem registrar presença' });
+    }
+
+    const encontro = db.prepare('SELECT * FROM encontros WHERE id = ?').get(req.params.id);
+    if (!encontro) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Encontro não encontrado' });
+    }
+
+    // R10 item 2 / R5: Idempotência - Presença já existente
+    const presencaExistente = db.prepare(`
+      SELECT * FROM presencas 
+      WHERE encontroId = ? AND participanteId = ?
+    `).get(encontro.id, req.usuario.id);
+
+    if (presencaExistente) {
+      return res.status(200).json(presencaExistente);
+    }
+
+    // R4: Exigência de inscrição confirmada
+    const inscricao = db.prepare(`
+      SELECT * FROM inscricoes 
+      WHERE atividadeId = ? AND participanteId = ?
+    `).get(encontro.atividadeId, req.usuario.id);
+
+    if (!inscricao || inscricao.status !== 'confirmada') {
+      return res.status(403).json({ erro: 'NAO_INSCRITO', mensagem: 'Participante não possui inscrição confirmada nesta atividade' });
+    }
+
+    // R3 / R10 item 5: Janela para registro de presença online [inicio - 15min, inicio + 30min]
+    const agora = relogio.agora();
+    const agoraMs = new Date(agora).getTime();
+    const inicioMs = new Date(encontro.inicio).getTime();
+
+    const janelaInicioMs = inicioMs - 15 * 60 * 1000;
+    const janelaFimMs = inicioMs + 30 * 60 * 1000;
+
+    if (agoraMs < janelaInicioMs || agoraMs > janelaFimMs) {
+      return res.status(422).json({ erro: 'FORA_DA_JANELA', mensagem: 'Registro de presença fora da janela permitida' });
+    }
+
+    const { codigo } = req.body || {};
+    if (!codigo || typeof codigo !== 'string' || codigo.length !== 6) {
+      return res.status(422).json({ erro: 'DADOS_INVALIDOS', mensagem: 'Código inválido ou ausente' });
+    }
+
+    // R2 / R10 item 6: Validação do código QR (minuto atual ou grace period de 1 min)
+    const baldeAtual = obterBaldeMinuto(agoraMs);
+    const codigoAtual = gerarCodigo(encontro.id, baldeAtual);
+    const codigoAnterior = gerarCodigo(encontro.id, baldeAtual - 1);
+
+    if (codigo !== codigoAtual && codigo !== codigoAnterior) {
+      return res.status(422).json({ erro: 'CODIGO_INVALIDO', mensagem: 'Código QR inválido ou expirado' });
+    }
+
+    const presencaId = gerarId('pre');
+    db.prepare(`
+      INSERT INTO presencas (id, encontroId, participanteId, origem, lidoEm, registradaEm, justificativa)
+      VALUES (?, ?, ?, 'qr', ?, ?, NULL)
+    `).run(presencaId, encontro.id, req.usuario.id, agora, agora);
+
+    const presencaCriada = db.prepare('SELECT * FROM presencas WHERE id = ?').get(presencaId);
+    res.status(201).json(presencaCriada);
   });
 
   return app;
