@@ -5,5 +5,5 @@ Cada integrante é dono de um módulo inteiro: entrevista, spec, testes, API, te
 | Módulo | Dono | Usuário do GitHub |
 |---|---|---|
 | M1 — Grade de atividades | Gabriel Tonon Barreiros | gabrieltononb |
-| M2 — Inscrições e lista de espera | | |
+| M2 — Inscrições e lista de espera | Laura Santoro Cruz | Daylighter04 |
 | M3 — Presença por QR | | |
