@@ -22,6 +22,49 @@ export const mockState = {
   limiteManuaisAtingido: false,
   codigoRejeitado: false,
   sincronizacaoTardia: false,
+  atividades: [
+    {
+      id: 'atv_1',
+      titulo: 'Minicurso Flutter',
+      tipo: 'minicurso',
+      salaId: 'lab-3',
+      vagas: 20,
+      ocupadas: 15,
+      vagasRestantes: 5,
+      emEspera: 0,
+      cargaHorariaMinutos: 360,
+      situacao: 'prevista',
+      encontros: [
+        { id: 'enc_1', inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T17:00:00-03:00' },
+      ],
+    },
+    {
+      id: 'atv_2',
+      titulo: 'Minicurso Python Avançado',
+      tipo: 'minicurso',
+      salaId: 'lab-3',
+      vagas: 1,
+      ocupadas: 1,
+      vagasRestantes: 0,
+      emEspera: 2,
+      cargaHorariaMinutos: 180,
+      situacao: 'prevista',
+      encontros: [
+        { id: 'enc_2', inicio: '2026-10-20T14:00:00-03:00', fim: '2026-10-20T17:00:00-03:00' },
+      ],
+    },
+  ],
+  inscricoes: [
+    {
+      id: 'ins_01',
+      atividadeId: 'atv_1',
+      participanteId: 'p-carla',
+      status: 'confirmada',
+      posicaoNaEspera: null,
+      convocadaAte: null,
+      criadaEm: '2026-10-13T09:00:00-03:00',
+    },
+  ],
 };
 
 export function resetMockState() {
@@ -44,6 +87,49 @@ export function resetMockState() {
   mockState.limiteManuaisAtingido = false;
   mockState.codigoRejeitado = false;
   mockState.sincronizacaoTardia = false;
+  mockState.atividades = [
+    {
+      id: 'atv_1',
+      titulo: 'Minicurso Flutter',
+      tipo: 'minicurso',
+      salaId: 'lab-3',
+      vagas: 20,
+      ocupadas: 15,
+      vagasRestantes: 5,
+      emEspera: 0,
+      cargaHorariaMinutos: 360,
+      situacao: 'prevista',
+      encontros: [
+        { id: 'enc_1', inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T17:00:00-03:00' },
+      ],
+    },
+    {
+      id: 'atv_2',
+      titulo: 'Minicurso Python Avançado',
+      tipo: 'minicurso',
+      salaId: 'lab-3',
+      vagas: 1,
+      ocupadas: 1,
+      vagasRestantes: 0,
+      emEspera: 2,
+      cargaHorariaMinutos: 180,
+      situacao: 'prevista',
+      encontros: [
+        { id: 'enc_2', inicio: '2026-10-20T14:00:00-03:00', fim: '2026-10-20T17:00:00-03:00' },
+      ],
+    },
+  ];
+  mockState.inscricoes = [
+    {
+      id: 'ins_01',
+      atividadeId: 'atv_1',
+      participanteId: 'p-carla',
+      status: 'confirmada',
+      posicaoNaEspera: null,
+      convocadaAte: null,
+      criadaEm: '2026-10-13T09:00:00-03:00',
+    },
+  ];
 }
 
 export const handlers = [
@@ -241,5 +327,100 @@ export const handlers = [
 
     const filtradas = mockState.presencas.filter((p) => p.encontroId === params.id);
     return HttpResponse.json(filtradas);
+  }),
+
+  // ==========================================
+  // Mock Handlers M2
+  // ==========================================
+
+  // GET /atividades
+  http.get('http://localhost:3000/atividades', () => {
+    return HttpResponse.json(mockState.atividades);
+  }),
+
+  // GET /atividades/:id
+  http.get('http://localhost:3000/atividades/:id', ({ params }) => {
+    const atv = mockState.atividades.find((a) => a.id === params.id);
+    if (!atv) {
+      return HttpResponse.json({ erro: 'NAO_ENCONTRADO' }, { status: 404 });
+    }
+    return HttpResponse.json(atv);
+  }),
+
+  // GET /inscricoes
+  http.get('http://localhost:3000/inscricoes', ({ request }) => {
+    const usuarioId = request.headers.get('X-Usuario');
+    if (!usuarioId) {
+      return HttpResponse.json({ erro: 'USUARIO_DESCONHECIDO' }, { status: 401 });
+    }
+    const filtradas = mockState.inscricoes.filter((i) =>
+      usuarioId.startsWith('org-') ? true : i.participanteId === usuarioId
+    );
+    return HttpResponse.json(filtradas);
+  }),
+
+  // POST /atividades/:id/inscricoes
+  http.post('http://localhost:3000/atividades/:id/inscricoes', ({ params, request }) => {
+    const usuarioId = request.headers.get('X-Usuario');
+    if (!usuarioId) {
+      return HttpResponse.json({ erro: 'USUARIO_DESCONHECIDO' }, { status: 401 });
+    }
+    const atv = mockState.atividades.find((a) => a.id === params.id);
+    if (!atv) {
+      return HttpResponse.json({ erro: 'NAO_ENCONTRADO' }, { status: 404 });
+    }
+
+    const status = atv.vagasRestantes > 0 ? 'confirmada' : 'em_espera';
+    const posicaoNaEspera = status === 'em_espera' ? atv.emEspera + 1 : null;
+
+    const nova = {
+      id: `ins_${Math.random().toString(16).slice(2, 10)}`,
+      atividadeId: atv.id,
+      participanteId: usuarioId,
+      status,
+      posicaoNaEspera,
+      convocadaAte: null,
+      criadaEm: new Date().toISOString(),
+    };
+
+    mockState.inscricoes.push(nova);
+    if (status === 'confirmada') {
+      atv.ocupadas += 1;
+      atv.vagasRestantes -= 1;
+    } else {
+      atv.emEspera += 1;
+    }
+
+    return HttpResponse.json(nova, { status: 201 });
+  }),
+
+  // POST /inscricoes/:id/cancelamento
+  http.post('http://localhost:3000/inscricoes/:id/cancelamento', ({ params, request }) => {
+    const usuarioId = request.headers.get('X-Usuario');
+    const ins = mockState.inscricoes.find((i) => i.id === params.id);
+    if (!ins || ins.participanteId !== usuarioId) {
+      return HttpResponse.json({ erro: 'NAO_ENCONTRADO' }, { status: 404 });
+    }
+
+    ins.status = 'cancelada';
+    ins.posicaoNaEspera = null;
+    ins.convocadaAte = null;
+
+    return HttpResponse.json(ins);
+  }),
+
+  // POST /inscricoes/:id/confirmacao
+  http.post('http://localhost:3000/inscricoes/:id/confirmacao', ({ params, request }) => {
+    const usuarioId = request.headers.get('X-Usuario');
+    const ins = mockState.inscricoes.find((i) => i.id === params.id);
+    if (!ins || ins.participanteId !== usuarioId) {
+      return HttpResponse.json({ erro: 'NAO_ENCONTRADO' }, { status: 404 });
+    }
+
+    ins.status = 'confirmada';
+    ins.posicaoNaEspera = null;
+    ins.convocadaAte = null;
+
+    return HttpResponse.json(ins);
   }),
 ];

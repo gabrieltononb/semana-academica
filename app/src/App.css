@@ -807,3 +807,295 @@ body {
   border-top: 1px solid var(--border);
   margin-top: auto;
 }
+
+/* ========================================================
+   M2 — Inscrições e Gestão de Vagas
+   ======================================================== */
+.inscricoes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.inscricoes-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.sub-nav-tabs {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.btn-subtab {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-subtab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.badge-contagem {
+  background: white;
+  color: var(--primary);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.catalogo-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .catalogo-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.card-atividade {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card-atividade:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.card-atividade.selecionada {
+  border-color: var(--primary);
+  background: #eff6ff;
+}
+
+.card-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tag-tipo {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.tag-palestra { background: #dbeafe; color: #1e40af; }
+.tag-minicurso { background: #fef3c7; color: #92400e; }
+
+.vagas-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.com-vagas { color: #16a34a; }
+.lotado { color: #dc2626; }
+
+.status-inscrito-tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.5rem;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 4px;
+  margin-top: auto;
+}
+
+.detalhe-atividade {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  height: fit-content;
+}
+
+.detalhe-conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.lista-encontros {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.acoes-detalhe {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.btn-inscrever {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: var(--radius);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-vaga { background: #16a34a; color: white; }
+.btn-vaga:hover { background: #15803d; }
+.btn-espera { background: #d97706; color: white; }
+.btn-espera:hover { background: #b45309; }
+
+.btn-cancelar-inscricao {
+  width: 100%;
+  padding: 0.6rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancelar-inscricao:hover {
+  background: #fecaca;
+}
+
+.aviso-ja-inscrito {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+/* Tabela Minhas Inscrições */
+.tabela-responsiva {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.tabela-inscricoes {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.tabela-inscricoes th,
+.tabela-inscricoes td {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.tabela-inscricoes th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.status-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-confirmada { background: #dcfce7; color: #15803d; }
+.badge-em_espera { background: #fef3c7; color: #b45309; }
+.badge-convocada { background: #dbeafe; color: #1d4ed8; }
+.badge-cancelada { background: #f1f5f9; color: #64748b; }
+.badge-expirada { background: #fee2e2; color: #b91c1c; }
+
+.posicao-fila {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.box-convocacao {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.relogio-regressivo {
+  font-family: monospace;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #eff6ff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.botoes-acoes {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-confirmar-vaga {
+  background: #16a34a;
+  color: white;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-confirmar-vaga:hover {
+  background: #15803d;
+}
+
+.btn-cancelar-tabela {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.btn-cancelar-tabela:hover {
+  background: #fee2e2;
+}
+
+.texto-inativo {
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+

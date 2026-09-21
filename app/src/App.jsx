@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar.jsx';
 import { OrganizacaoScreen } from './screens/OrganizacaoScreen.jsx';
 import { ParticipanteScreen } from './screens/ParticipanteScreen.jsx';
+import { InscricoesScreen } from './screens/InscricoesScreen.jsx';
 import { useNetworkStatus } from './hooks/useNetworkStatus.js';
 import { useOfflineSync } from './hooks/useOfflineSync.js';
 import './App.css';
 
 export function App() {
-  const [telaAtiva, setTelaAtiva] = useState('organizacao');
+  const [telaAtiva, setTelaAtiva] = useState('inscricoes');
   const [usuarioOrg, setUsuarioOrg] = useState('org-ana');
   const [usuarioPart, setUsuarioPart] = useState('p-carla');
 
@@ -42,14 +43,18 @@ export function App() {
       />
 
       <main className="app-main">
-        {telaAtiva === 'organizacao' ? (
+        {telaAtiva === 'organizacao' && (
           <OrganizacaoScreen usuarioId={usuarioOrg} encontroIdPadrao="enc_1" />
-        ) : (
+        )}
+        {telaAtiva === 'participante' && (
           <ParticipanteScreen
             usuarioId={usuarioPart}
             encontroIdPadrao="enc_1"
             isOnline={isOnline}
           />
+        )}
+        {telaAtiva === 'inscricoes' && (
+          <InscricoesScreen usuarioId={usuarioPart} />
         )}
       </main>
 

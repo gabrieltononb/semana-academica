@@ -35,12 +35,20 @@ export function Navbar({
           onClick={() => aoMudarTela('participante')}
           data-testid="tab-participante"
         >
-          📱 Tela do Participante
+          📱 Presença por QR (M3)
           {totalPendentes > 0 && (
             <span className="nav-badge" data-testid="nav-badge-pendentes">
               {totalPendentes}
             </span>
           )}
+        </button>
+        <button
+          type="button"
+          className={`nav-tab ${telaAtiva === 'inscricoes' ? 'active' : ''}`}
+          onClick={() => aoMudarTela('inscricoes')}
+          data-testid="tab-inscricoes"
+        >
+          📝 Inscrições e Vagas (M2)
         </button>
       </nav>
 
