@@ -3,6 +3,14 @@ const crypto = require('node:crypto');
 const { criarBanco, carregarDadosIniciais } = require('./db.js');
 const { relogio } = require('./relogio.js');
 const { calcularCodigoDoEncontro, gerarCodigo, obterBaldeMinuto } = require('./codigo-qr.js');
+const {
+  obterPrimeiroEncontro,
+  formatarInscricao,
+  verificarConflitoDeHorario,
+  atingiuLimiteDeMinicursos,
+  promoverProximoDaEspera,
+  expirarConvocacoesVencidas,
+} = require('./inscricoes.js');
 
 function gerarId(prefixo) {
   return `${prefixo}_${crypto.randomBytes(4).toString('hex')}`;
@@ -122,6 +130,291 @@ function criarServidor(banco) {
     db.prepare("UPDATE atividades SET situacao = 'cancelada' WHERE id = ?").run(req.params.id);
     const atualizada = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
     res.json(atualizada);
+  });
+
+  // GET /atividades
+  app.get('/atividades', (req, res) => {
+    const { dia, tipo } = req.query || {};
+    let query = 'SELECT * FROM atividades WHERE 1=1';
+    const params = [];
+
+    if (tipo) {
+      query += ' AND tipo = ?';
+      params.push(tipo);
+    }
+
+    const atividades = db.prepare(query).all(...params);
+    const resultado = [];
+
+    for (const atv of atividades) {
+      const encontros = db.prepare('SELECT id, inicio, fim FROM encontros WHERE atividadeId = ? ORDER BY inicio ASC').all(atv.id);
+
+      if (dia) {
+        const atendeDia = encontros.some(e => e.inicio.startsWith(dia));
+        if (!atendeDia) continue;
+      }
+
+      let cargaHorariaMinutos = 0;
+      for (const e of encontros) {
+        cargaHorariaMinutos += Math.round((new Date(e.fim).getTime() - new Date(e.inicio).getTime()) / 60000);
+      }
+
+      const { ocupadas } = db.prepare("SELECT COUNT(*) as ocupadas FROM inscricoes WHERE atividadeId = ? AND status = 'confirmada'").get(atv.id);
+      const { emEspera } = db.prepare("SELECT COUNT(*) as emEspera FROM inscricoes WHERE atividadeId = ? AND status = 'em_espera'").get(atv.id);
+
+      resultado.push({
+        id: atv.id,
+        titulo: atv.titulo,
+        tipo: atv.tipo,
+        salaId: atv.salaId,
+        vagas: atv.vagas,
+        encontros,
+        cargaHorariaMinutos,
+        situacao: atv.situacao,
+        ocupadas,
+        vagasRestantes: Math.max(0, atv.vagas - ocupadas),
+        emEspera
+      });
+    }
+
+    res.json(resultado);
+  });
+
+  // GET /atividades/:id
+  app.get('/atividades/:id', (req, res) => {
+    const atv = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
+    if (!atv) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Atividade não encontrada' });
+    }
+
+    const encontros = db.prepare('SELECT id, inicio, fim FROM encontros WHERE atividadeId = ? ORDER BY inicio ASC').all(atv.id);
+    let cargaHorariaMinutos = 0;
+    for (const e of encontros) {
+      cargaHorariaMinutos += Math.round((new Date(e.fim).getTime() - new Date(e.inicio).getTime()) / 60000);
+    }
+
+    const { ocupadas } = db.prepare("SELECT COUNT(*) as ocupadas FROM inscricoes WHERE atividadeId = ? AND status = 'confirmada'").get(atv.id);
+    const { emEspera } = db.prepare("SELECT COUNT(*) as emEspera FROM inscricoes WHERE atividadeId = ? AND status = 'em_espera'").get(atv.id);
+
+    res.json({
+      id: atv.id,
+      titulo: atv.titulo,
+      tipo: atv.tipo,
+      salaId: atv.salaId,
+      vagas: atv.vagas,
+      encontros,
+      cargaHorariaMinutos,
+      situacao: atv.situacao,
+      ocupadas,
+      vagasRestantes: Math.max(0, atv.vagas - ocupadas),
+      emEspera
+    });
+  });
+
+  // ==========================================
+  // M2 — Inscrições e Lista de Espera
+  // ==========================================
+
+  // POST /atividades/:id/inscricoes
+  app.post('/atividades/:id/inscricoes', (req, res) => {
+    if (req.usuario.papel !== 'participante') {
+      return res.status(403).json({ erro: 'SOMENTE_PARTICIPANTE', mensagem: 'Apenas participantes podem se inscrever em atividades' });
+    }
+
+    const agora = relogio.agora();
+    expirarConvocacoesVencidas(db, agora);
+
+    const atividade = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
+    if (!atividade) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Atividade não encontrada' });
+    }
+
+    if (atividade.situacao === 'cancelada') {
+      return res.status(422).json({ erro: 'ATIVIDADE_CANCELADA', mensagem: 'Esta atividade foi cancelada' });
+    }
+
+    const primeiroEncontro = obterPrimeiroEncontro(db, atividade.id);
+    if (primeiroEncontro) {
+      const agoraMs = new Date(agora).getTime();
+      const inicioMs = new Date(primeiroEncontro.inicio).getTime();
+      if (agoraMs >= inicioMs) {
+        return res.status(422).json({ erro: 'INSCRICOES_ENCERRADAS', mensagem: 'As inscrições para esta atividade já foram encerradas' });
+      }
+    }
+
+    const inscricaoAtiva = db.prepare(`
+      SELECT * FROM inscricoes 
+      WHERE atividadeId = ? AND participanteId = ? AND status IN ('confirmada', 'em_espera', 'convocada')
+    `).get(atividade.id, req.usuario.id);
+
+    if (inscricaoAtiva) {
+      return res.status(409).json({ erro: 'JA_INSCRITO', mensagem: 'Participante já possui inscrição ativa nesta atividade' });
+    }
+
+    if (verificarConflitoDeHorario(db, req.usuario.id, atividade.id)) {
+      return res.status(409).json({ erro: 'CONFLITO_DE_HORARIO', mensagem: 'Conflito de horário com outra atividade já inscrita' });
+    }
+
+    if (atingiuLimiteDeMinicursos(db, req.usuario.id, atividade.id)) {
+      return res.status(422).json({ erro: 'LIMITE_DE_MINICURSOS', mensagem: 'Limite de 2 minicursos simultâneos atingido' });
+    }
+
+    const { totalConfirmadas } = db.prepare(`
+      SELECT COUNT(*) as totalConfirmadas 
+      FROM inscricoes 
+      WHERE atividadeId = ? AND status = 'confirmada'
+    `).get(atividade.id);
+
+    const novoId = gerarId('ins');
+    let status;
+
+    if (totalConfirmadas < atividade.vagas) {
+      status = 'confirmada';
+    } else {
+      status = 'em_espera';
+    }
+
+    db.prepare(`
+      INSERT INTO inscricoes (id, atividadeId, participanteId, status, convocadaAte, criadaEm)
+      VALUES (?, ?, ?, ?, NULL, ?)
+    `).run(novoId, atividade.id, req.usuario.id, status, agora);
+
+    const novaInscricao = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(novoId);
+    res.status(201).json(formatarInscricao(db, novaInscricao));
+  });
+
+  // GET /inscricoes
+  app.get('/inscricoes', (req, res) => {
+    const agora = relogio.agora();
+    expirarConvocacoesVencidas(db, agora);
+
+    const { atividadeId } = req.query || {};
+
+    let query = 'SELECT * FROM inscricoes WHERE 1=1';
+    const params = [];
+
+    if (req.usuario.papel === 'participante') {
+      query += ' AND participanteId = ?';
+      params.push(req.usuario.id);
+    }
+
+    if (atividadeId) {
+      query += ' AND atividadeId = ?';
+      params.push(atividadeId);
+    }
+
+    query += ' ORDER BY criadaEm ASC, id ASC';
+
+    const rows = db.prepare(query).all(...params);
+    const resultado = rows.map(r => formatarInscricao(db, r));
+    res.json(resultado);
+  });
+
+  // GET /inscricoes/:id
+  app.get('/inscricoes/:id', (req, res) => {
+    const agora = relogio.agora();
+    expirarConvocacoesVencidas(db, agora);
+
+    const inscricao = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(req.params.id);
+    if (!inscricao) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Inscrição não encontrada' });
+    }
+
+    if (req.usuario.papel === 'participante' && inscricao.participanteId !== req.usuario.id) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Inscrição não encontrada' });
+    }
+
+    res.json(formatarInscricao(db, inscricao));
+  });
+
+  // POST /inscricoes/:id/cancelamento
+  app.post('/inscricoes/:id/cancelamento', (req, res) => {
+    if (req.usuario.papel !== 'participante') {
+      return res.status(403).json({ erro: 'SOMENTE_PARTICIPANTE', mensagem: 'Apenas participantes podem cancelar inscrição' });
+    }
+
+    const agora = relogio.agora();
+    expirarConvocacoesVencidas(db, agora);
+
+    const inscricao = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(req.params.id);
+    if (!inscricao || inscricao.participanteId !== req.usuario.id) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Inscrição não encontrada' });
+    }
+
+    const primeiroEncontro = obterPrimeiroEncontro(db, inscricao.atividadeId);
+    if (primeiroEncontro) {
+      const agoraMs = new Date(agora).getTime();
+      const inicioMs = new Date(primeiroEncontro.inicio).getTime();
+      if (agoraMs >= inicioMs) {
+        return res.status(422).json({ erro: 'ATIVIDADE_JA_INICIADA', mensagem: 'A atividade já foi iniciada; não é possível cancelar a inscrição' });
+      }
+    }
+
+    if (inscricao.status === 'cancelada' || inscricao.status === 'expirada') {
+      return res.status(422).json({ erro: 'INSCRICAO_INATIVA', mensagem: 'Esta inscrição já se encontra inativa' });
+    }
+
+    const statusAnterior = inscricao.status;
+
+    db.prepare(`
+      UPDATE inscricoes 
+      SET status = 'cancelada', convocadaAte = NULL 
+      WHERE id = ?
+    `).run(inscricao.id);
+
+    if (statusAnterior === 'confirmada' || statusAnterior === 'convocada') {
+      promoverProximoDaEspera(db, inscricao.atividadeId, agora);
+    }
+
+    const cancelada = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(inscricao.id);
+    res.json(formatarInscricao(db, cancelada));
+  });
+
+  // POST /inscricoes/:id/confirmacao
+  app.post('/inscricoes/:id/confirmacao', (req, res) => {
+    if (req.usuario.papel !== 'participante') {
+      return res.status(403).json({ erro: 'SOMENTE_PARTICIPANTE', mensagem: 'Apenas participantes podem confirmar convocação' });
+    }
+
+    const agora = relogio.agora();
+
+    const inscricao = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(req.params.id);
+    if (!inscricao || inscricao.participanteId !== req.usuario.id) {
+      return res.status(404).json({ erro: 'NAO_ENCONTRADO', mensagem: 'Inscrição não encontrada' });
+    }
+
+    if (inscricao.status === 'expirada') {
+      return res.status(422).json({ erro: 'CONVOCACAO_EXPIRADA', mensagem: 'O prazo para confirmar esta convocação expirou' });
+    }
+
+    if (inscricao.status !== 'convocada') {
+      return res.status(422).json({ erro: 'SEM_CONVOCACAO', mensagem: 'Inscrição não está em processo de convocação' });
+    }
+
+    const agoraMs = new Date(agora).getTime();
+    const prazoMs = new Date(inscricao.convocadaAte).getTime();
+    if (agoraMs > prazoMs) {
+      db.prepare("UPDATE inscricoes SET status = 'expirada', convocadaAte = NULL WHERE id = ?").run(inscricao.id);
+      promoverProximoDaEspera(db, inscricao.atividadeId, agora);
+      return res.status(422).json({ erro: 'CONVOCACAO_EXPIRADA', mensagem: 'O prazo para confirmar esta convocação expirou' });
+    }
+
+    if (verificarConflitoDeHorario(db, req.usuario.id, inscricao.atividadeId)) {
+      return res.status(409).json({ erro: 'CONFLITO_DE_HORARIO', mensagem: 'Conflito de horário com outra atividade confirmada' });
+    }
+
+    if (atingiuLimiteDeMinicursos(db, req.usuario.id, inscricao.atividadeId)) {
+      return res.status(422).json({ erro: 'LIMITE_DE_MINICURSOS', mensagem: 'Limite de 2 minicursos simultâneos atingido' });
+    }
+
+    db.prepare(`
+      UPDATE inscricoes 
+      SET status = 'confirmada', convocadaAte = NULL 
+      WHERE id = ?
+    `).run(inscricao.id);
+
+    const confirmada = db.prepare('SELECT * FROM inscricoes WHERE id = ?').get(inscricao.id);
+    res.json(formatarInscricao(db, confirmada));
   });
 
   // GET /encontros/:id/codigo (Fatia 1: R1, R2, R13)

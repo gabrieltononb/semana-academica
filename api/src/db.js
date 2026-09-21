@@ -38,6 +38,7 @@ function criarBanco(caminho = ':memory:') {
       atividadeId TEXT NOT NULL,
       participanteId TEXT NOT NULL,
       status TEXT NOT NULL,
+      convocadaAte TEXT,
       criadaEm TEXT NOT NULL
     );
 
