@@ -72,3 +72,24 @@ describe('Módulo 1 — Fatia 1: Infraestrutura e Salas', () => {
     ]);
   });
 });
+
+describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
+  let app;
+
+  beforeEach(async () => {
+    process.env.MODO_TESTE = '1';
+    app = criarApp({ database: ':memory:' });
+    await request(app).post('/_teste/reset');
+  });
+
+  it('M1-R2: recusa criação de atividade por participante', async () => {
+    const res = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'p-carla')
+      .send({});
+    assert.equal(res.status, 403);
+    assert.equal(res.body.erro, 'SOMENTE_ORGANIZACAO');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+});
+

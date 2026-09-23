@@ -4,6 +4,7 @@ import { criarRelogio } from './relogio.js';
 import { criarMiddlewareAutenticacao } from './middleware/autenticacao.js';
 import { criarRotasTeste } from './rotas/teste.js';
 import { criarRotasSalas } from './rotas/salas.js';
+import { criarRotasAtividades } from './rotas/atividades.js';
 
 export function criarApp(opcoes = {}) {
   const app = express();
@@ -33,6 +34,7 @@ export function criarApp(opcoes = {}) {
 
   // Rotas da aplicação
   app.use('/salas', criarRotasSalas({ db }));
+  app.use('/atividades', criarRotasAtividades({ db, relogio }));
 
   // 404 padrão para recursos não encontrados
   app.use((req, res) => {
