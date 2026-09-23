@@ -202,6 +202,37 @@ export function criarRotasAtividades({ db, relogio }) {
         });
       }
 
+      if (req.body.vagas > atividade.vagas) {
+        const novasVagas = req.body.vagas - atividade.vagas;
+        const emEspera = db.prepare(`
+          SELECT id
+          FROM inscricoes
+          WHERE atividade_id = ? AND status = 'em_espera'
+          ORDER BY posicao_na_espera ASC, criada_em ASC
+        `).all(atividade.id);
+
+        const convocadas = emEspera.slice(0, novasVagas);
+        const restantes = emEspera.slice(novasVagas);
+
+        const atualizaConvocada = db.prepare(`
+          UPDATE inscricoes
+          SET status = 'convocada', posicao_na_espera = NULL
+          WHERE id = ?
+        `);
+        for (const c of convocadas) {
+          atualizaConvocada.run(c.id);
+        }
+
+        const atualizaRestante = db.prepare(`
+          UPDATE inscricoes
+          SET posicao_na_espera = ?
+          WHERE id = ?
+        `);
+        for (let i = 0; i < restantes.length; i++) {
+          atualizaRestante.run(i + 1, restantes[i].id);
+        }
+      }
+
       db.prepare('UPDATE atividades SET vagas = ? WHERE id = ?').run(req.body.vagas, atividade.id);
     }
 

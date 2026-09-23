@@ -1298,5 +1298,127 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(res.body.ocupadas, 5);
     assert.equal(res.body.vagasRestantes, 5);
   });
+
+  it('M1-R13: convoca automaticamente inscricoes da lista de espera ao expandir vagas com 200 OK', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra com Fila de Espera',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 20,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Cadastra 22 usuários no banco (20 confirmados + 2 em espera)
+    const insereUsuario = db.prepare('INSERT INTO usuarios (id, nome, papel) VALUES (?, ?, ?)');
+    for (let i = 1; i <= 22; i++) {
+      insereUsuario.run(`usr_esp_${i}`, `User ${i}`, 'participante');
+    }
+
+    const insereInscricao = db.prepare(`
+      INSERT INTO inscricoes (id, atividade_id, participante_id, status, posicao_na_espera, convocada_ate, criada_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // 20 confirmadas
+    for (let i = 1; i <= 20; i++) {
+      insereInscricao.run(`ins_conf_${i}`, atividadeId, `usr_esp_${i}`, 'confirmada', null, null, `2026-10-13T10:${String(i).padStart(2, '0')}:00-03:00`);
+    }
+
+    // 2 em espera
+    insereInscricao.run('ins_espera_1', atividadeId, 'usr_esp_21', 'em_espera', 1, null, '2026-10-13T11:00:00-03:00');
+    insereInscricao.run('ins_espera_2', atividadeId, 'usr_esp_22', 'em_espera', 2, null, '2026-10-13T11:05:00-03:00');
+
+    // Expande vagas de 20 para 22
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ vagas: 22 });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.vagas, 22);
+    assert.equal(res.body.ocupadas, 22); // 20 confirmadas + 2 convocadas
+    assert.equal(res.body.vagasRestantes, 0);
+    assert.equal(res.body.emEspera, 0);
+
+    // Verifica no banco se as inscrições foram convocadas
+    const ins1 = db.prepare('SELECT status, posicao_na_espera FROM inscricoes WHERE id = ?').get('ins_espera_1');
+    assert.equal(ins1.status, 'convocada');
+    assert.equal(ins1.posicao_na_espera, null);
+
+    const ins2 = db.prepare('SELECT status, posicao_na_espera FROM inscricoes WHERE id = ?').get('ins_espera_2');
+    assert.equal(ins2.status, 'convocada');
+    assert.equal(ins2.posicao_na_espera, null);
+  });
+
+  it('M1-R13: convoca apenas ate o limite de novas vagas e atualiza posicao da fila restante', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Fila Parcial',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 10,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const insereUsuario = db.prepare('INSERT INTO usuarios (id, nome, papel) VALUES (?, ?, ?)');
+    for (let i = 1; i <= 13; i++) {
+      insereUsuario.run(`usr_parc_${i}`, `User ${i}`, 'participante');
+    }
+
+    const insereInscricao = db.prepare(`
+      INSERT INTO inscricoes (id, atividade_id, participante_id, status, posicao_na_espera, convocada_ate, criada_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // 10 confirmadas
+    for (let i = 1; i <= 10; i++) {
+      insereInscricao.run(`ins_conf_p_${i}`, atividadeId, `usr_parc_${i}`, 'confirmada', null, null, `2026-10-13T10:${String(i).padStart(2, '0')}:00-03:00`);
+    }
+
+    // 3 em espera (posições 1, 2, 3)
+    insereInscricao.run('ins_esp_p_1', atividadeId, 'usr_parc_11', 'em_espera', 1, null, '2026-10-13T11:00:00-03:00');
+    insereInscricao.run('ins_esp_p_2', atividadeId, 'usr_parc_12', 'em_espera', 2, null, '2026-10-13T11:05:00-03:00');
+    insereInscricao.run('ins_esp_p_3', atividadeId, 'usr_parc_13', 'em_espera', 3, null, '2026-10-13T11:10:00-03:00');
+
+    // Aumenta apenas 1 vaga (de 10 para 11)
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ vagas: 11 });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.vagas, 11);
+    assert.equal(res.body.ocupadas, 11); // 10 confirmadas + 1 convocada
+    assert.equal(res.body.vagasRestantes, 0);
+    assert.equal(res.body.emEspera, 2);
+
+    // O primeiro foi convocado
+    const ins1 = db.prepare('SELECT status, posicao_na_espera FROM inscricoes WHERE id = ?').get('ins_esp_p_1');
+    assert.equal(ins1.status, 'convocada');
+    assert.equal(ins1.posicao_na_espera, null);
+
+    // O segundo virou posição 1
+    const ins2 = db.prepare('SELECT status, posicao_na_espera FROM inscricoes WHERE id = ?').get('ins_esp_p_2');
+    assert.equal(ins2.status, 'em_espera');
+    assert.equal(ins2.posicao_na_espera, 1);
+
+    // O terceiro virou posição 2
+    const ins3 = db.prepare('SELECT status, posicao_na_espera FROM inscricoes WHERE id = ?').get('ins_esp_p_3');
+    assert.equal(ins3.status, 'em_espera');
+    assert.equal(ins3.posicao_na_espera, 2);
+  });
 });
 
