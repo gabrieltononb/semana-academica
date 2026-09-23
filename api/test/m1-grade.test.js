@@ -1045,5 +1045,31 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(res.body.erro, 'NAO_ENCONTRADO');
     assert.equal(res.body.mensagem, 'Atividade não encontrada.');
   });
+
+  it('M1-R8: recusa alteracao de vagas acima da capacidade da sala com 422 VAGAS_ACIMA_DA_CAPACIDADE', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Sala 101',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ vagas: 45 });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'VAGAS_ACIMA_DA_CAPACIDADE');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
 });
 

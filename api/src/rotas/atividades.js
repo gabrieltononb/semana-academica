@@ -162,6 +162,17 @@ export function criarRotasAtividades({ db, relogio }) {
       });
     }
 
+    if (req.body.vagas !== undefined) {
+      const sala = db.prepare('SELECT id, capacidade FROM salas WHERE id = ?').get(atividade.sala_id);
+      const validacaoCapacidade = validarCapacidadeSala(req.body.vagas, sala);
+      if (!validacaoCapacidade.valido) {
+        return res.status(422).json({
+          erro: validacaoCapacidade.erro,
+          mensagem: validacaoCapacidade.mensagem
+        });
+      }
+    }
+
     res.json({});
   });
 
