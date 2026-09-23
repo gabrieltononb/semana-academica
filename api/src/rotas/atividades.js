@@ -153,6 +153,30 @@ export function criarRotasAtividades({ db, relogio }) {
     res.json(dto);
   });
 
+  router.patch('/:id', exigirOrganizacao, tratarCorpoJson, (req, res) => {
+    const atividade = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
+    if (!atividade) {
+      return res.status(404).json({
+        erro: 'NAO_ENCONTRADO',
+        mensagem: 'Atividade não encontrada.'
+      });
+    }
+
+    res.json({});
+  });
+
+  router.post('/:id/cancelamento', exigirOrganizacao, (req, res) => {
+    const atividade = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
+    if (!atividade) {
+      return res.status(404).json({
+        erro: 'NAO_ENCONTRADO',
+        mensagem: 'Atividade não encontrada.'
+      });
+    }
+
+    res.json({});
+  });
+
   return router;
 }
 

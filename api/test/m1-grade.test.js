@@ -1014,3 +1014,36 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
   });
 });
 
+describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividades', () => {
+  let app;
+  let db;
+
+  beforeEach(async () => {
+    process.env.MODO_TESTE = '1';
+    db = criarBanco(':memory:');
+    app = criarApp({ db });
+    await request(app).post('/_teste/reset');
+  });
+
+  it('M1-R4: recusa alteracao de atividade inexistente com 404 NAO_ENCONTRADO', async () => {
+    const res = await request(app)
+      .patch('/atividades/atv_inexistente')
+      .set('X-Usuario', 'org-ana')
+      .send({ titulo: 'Novo Título' });
+
+    assert.equal(res.status, 404);
+    assert.equal(res.body.erro, 'NAO_ENCONTRADO');
+    assert.equal(res.body.mensagem, 'Atividade não encontrada.');
+  });
+
+  it('M1-R4: recusa cancelamento de atividade inexistente com 404 NAO_ENCONTRADO', async () => {
+    const res = await request(app)
+      .post('/atividades/atv_inexistente/cancelamento')
+      .set('X-Usuario', 'org-ana');
+
+    assert.equal(res.status, 404);
+    assert.equal(res.body.erro, 'NAO_ENCONTRADO');
+    assert.equal(res.body.mensagem, 'Atividade não encontrada.');
+  });
+});
+
