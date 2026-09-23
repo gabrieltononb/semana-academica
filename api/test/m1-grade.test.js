@@ -669,6 +669,43 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
     assert.equal(res.body[0].titulo, 'Palestra da Terça');
   });
 
+  it('M1-R17: filtra atividades por dia no fuso de Brasília na fronteira noturna com UTC', async () => {
+    // Cadastra atividade com encontro às 21:30 no fuso de Brasília (2026-10-21T00:30:00Z em UTC)
+    const resCriacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Noturna Especial',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-20T21:30:00-03:00', fim: '2026-10-20T23:00:00-03:00' }
+        ]
+      });
+    assert.equal(resCriacao.status, 201);
+    const idAtividade = resCriacao.body.id;
+
+    // Consulta filtrando pelo dia civil no calendário de Brasília (2026-10-20)
+    const resDia20 = await request(app)
+      .get('/atividades?dia=2026-10-20')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(resDia20.status, 200);
+    const encontradaDia20 = resDia20.body.find((a) => a.id === idAtividade);
+    assert.ok(encontradaDia20, 'Atividade das 21:30 de Brasília deve aparecer no filtro do dia 2026-10-20');
+    assert.equal(encontradaDia20.titulo, 'Palestra Noturna Especial');
+
+    // Consulta filtrando pelo dia 2026-10-21 (quando o encontro ocorreu em UTC, mas não em Brasília)
+    const resDia21 = await request(app)
+      .get('/atividades?dia=2026-10-21')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(resDia21.status, 200);
+    const encontradaDia21 = resDia21.body.find((a) => a.id === idAtividade);
+    assert.equal(encontradaDia21, undefined, 'Atividade das 21:30 de Brasília NÃO deve aparecer no filtro do dia 2026-10-21');
+  });
+
   it('M1-R17: filtra atividades por tipo', async () => {
     // Cria uma palestra
     const resPalestra = await request(app)
