@@ -162,6 +162,13 @@ export function criarRotasAtividades({ db, relogio }) {
       });
     }
 
+    if (atividade.cancelada === 1) {
+      return res.status(422).json({
+        erro: 'ATIVIDADE_CANCELADA',
+        mensagem: 'Não é possível alterar uma atividade cancelada.'
+      });
+    }
+
     const camposPermitidos = new Set(['titulo', 'vagas']);
     for (const chave of Object.keys(req.body)) {
       if (!camposPermitidos.has(chave)) {
@@ -258,6 +265,13 @@ export function criarRotasAtividades({ db, relogio }) {
       return res.status(404).json({
         erro: 'NAO_ENCONTRADO',
         mensagem: 'Atividade não encontrada.'
+      });
+    }
+
+    if (atividade.cancelada === 1) {
+      return res.status(422).json({
+        erro: 'ATIVIDADE_CANCELADA',
+        mensagem: 'Atividade já se encontra cancelada.'
       });
     }
 

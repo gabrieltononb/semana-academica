@@ -1420,5 +1420,62 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(ins3.status, 'em_espera');
     assert.equal(ins3.posicao_na_espera, 2);
   });
+
+  it('M1-R14: recusa alteracao via PATCH em atividade cancelada com 422 ATIVIDADE_CANCELADA', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Cancelada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Marca como cancelada no banco
+    db.prepare('UPDATE atividades SET cancelada = 1 WHERE id = ?').run(atividadeId);
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ titulo: 'Novo Título' });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'ATIVIDADE_CANCELADA');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R14: recusa novo cancelamento em atividade ja cancelada com 422 ATIVIDADE_CANCELADA', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Ja Cancelada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Marca como cancelada no banco
+    db.prepare('UPDATE atividades SET cancelada = 1 WHERE id = ?').run(atividadeId);
+
+    const res = await request(app)
+      .post(`/atividades/${atividadeId}/cancelamento`)
+      .set('X-Usuario', 'org-ana');
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'ATIVIDADE_CANCELADA');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
 });
 
