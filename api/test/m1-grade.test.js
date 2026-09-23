@@ -1025,6 +1025,57 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     await request(app).post('/_teste/reset');
   });
 
+  it('M1-R2: recusa alteração e cancelamento de atividade por participante com 403 SOMENTE_ORGANIZACAO', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra de Teste Permissao',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atvId = criacao.body.id;
+
+    // PATCH com participante p-diego
+    const resPatchDiego = await request(app)
+      .patch(`/atividades/${atvId}`)
+      .set('X-Usuario', 'p-diego')
+      .send({ titulo: 'Tentativa por participante' });
+    assert.equal(resPatchDiego.status, 403);
+    assert.equal(resPatchDiego.body.erro, 'SOMENTE_ORGANIZACAO');
+    assert.ok(resPatchDiego.body.mensagem, 'Deve conter mensagem descritiva');
+
+    // PATCH com participante p-carla
+    const resPatchCarla = await request(app)
+      .patch(`/atividades/${atvId}`)
+      .set('X-Usuario', 'p-carla')
+      .send({ titulo: 'Tentativa por participante' });
+    assert.equal(resPatchCarla.status, 403);
+    assert.equal(resPatchCarla.body.erro, 'SOMENTE_ORGANIZACAO');
+    assert.ok(resPatchCarla.body.mensagem, 'Deve conter mensagem descritiva');
+
+    // POST cancelamento com participante p-carla
+    const resCancCarla = await request(app)
+      .post(`/atividades/${atvId}/cancelamento`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resCancCarla.status, 403);
+    assert.equal(resCancCarla.body.erro, 'SOMENTE_ORGANIZACAO');
+    assert.ok(resCancCarla.body.mensagem, 'Deve conter mensagem descritiva');
+
+    // POST cancelamento com participante p-diego
+    const resCancDiego = await request(app)
+      .post(`/atividades/${atvId}/cancelamento`)
+      .set('X-Usuario', 'p-diego');
+    assert.equal(resCancDiego.status, 403);
+    assert.equal(resCancDiego.body.erro, 'SOMENTE_ORGANIZACAO');
+    assert.ok(resCancDiego.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
   it('M1-R4: recusa alteracao de atividade inexistente com 404 NAO_ENCONTRADO', async () => {
     const res = await request(app)
       .patch('/atividades/atv_inexistente')
