@@ -109,5 +109,71 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(res2.status, 403);
     assert.equal(res2.body.erro, 'SOMENTE_ORGANIZACAO');
   });
+
+  it('M1-R5: recusa payload com campos obrigatorios ausentes ou invalidos', async () => {
+    // 1. Campos obrigatórios ausentes
+    const resVazio = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({});
+    assert.equal(resVazio.status, 422);
+    assert.equal(resVazio.body.erro, 'DADOS_INVALIDOS');
+
+    // 2. Título vazio ou tipo inválido
+    const resTipoInvalido = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: '',
+        tipo: 'seminario',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [{ inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }]
+      });
+    assert.equal(resTipoInvalido.status, 422);
+    assert.equal(resTipoInvalido.body.erro, 'DADOS_INVALIDOS');
+
+    // 3. SalaId não cadastrada
+    const resSalaInexistente = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Teste',
+        tipo: 'palestra',
+        salaId: 'sala-fantasma',
+        vagas: 10,
+        encontros: [{ inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }]
+      });
+    assert.equal(resSalaInexistente.status, 422);
+    assert.equal(resSalaInexistente.body.erro, 'DADOS_INVALIDOS');
+
+    // 4. Vagas menor que 1 ou não inteiro
+    const resVagasInvalidas = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Teste',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 0,
+        encontros: [{ inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }]
+      });
+    assert.equal(resVagasInvalidas.status, 422);
+    assert.equal(resVagasInvalidas.body.erro, 'DADOS_INVALIDOS');
+
+    // 5. Data de encontro sem fuso horário
+    const resSemFuso = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Teste',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [{ inicio: '2026-10-19T10:00:00', fim: '2026-10-19T12:00:00' }]
+      });
+    assert.equal(resSemFuso.status, 422);
+    assert.equal(resSemFuso.body.erro, 'DADOS_INVALIDOS');
+  });
 });
 
