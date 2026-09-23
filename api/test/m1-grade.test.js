@@ -331,5 +331,84 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(res.status, 422);
     assert.equal(res.body.erro, 'VAGAS_ACIMA_DA_CAPACIDADE');
   });
+
+  it('M1-R9: recusa conflito de sala e respeita intervalo minimo simetrico de 15 minutos', async () => {
+    // 1. Cadastra atividade base no auditorio das 10:00 as 12:00
+    const resBase = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Base',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resBase.status, 201);
+
+    // 2. Sentido 1: Novo encontro começa às 12:10 (intervalo 10 min < 15 min) -> 409
+    const resSentido1 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Conflito Posterior',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T12:10:00-03:00', fim: '2026-10-19T13:30:00-03:00' }
+        ]
+      });
+    assert.equal(resSentido1.status, 409);
+    assert.equal(resSentido1.body.erro, 'CONFLITO_DE_SALA');
+
+    // 3. Sentido 2: Novo encontro termina às 09:50 (intervalo 10 min < 15 min do início às 10:00) -> 409
+    const resSentido2 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Conflito Anterior',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T08:30:00-03:00', fim: '2026-10-19T09:50:00-03:00' }
+        ]
+      });
+    assert.equal(resSentido2.status, 409);
+    assert.equal(resSentido2.body.erro, 'CONFLITO_DE_SALA');
+
+    // 4. Fronteira exata (15 min): inicia às 12:15 (após término às 12:00) -> 201
+    const resFronteiraDepois = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Valida Posterior',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T12:15:00-03:00', fim: '2026-10-19T14:00:00-03:00' }
+        ]
+      });
+    assert.equal(resFronteiraDepois.status, 201);
+
+    // 5. Fronteira exata (15 min): termina às 09:45 (antes do início às 10:00) -> 201
+    const resFronteiraAntes = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Valida Anterior',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T08:00:00-03:00', fim: '2026-10-19T09:45:00-03:00' }
+        ]
+      });
+    assert.equal(resFronteiraAntes.status, 201);
+  });
 });
 

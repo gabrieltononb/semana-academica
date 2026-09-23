@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { exigirOrganizacao } from '../middleware/autorizacao.js';
 import { tratarCorpoJson } from '../middleware/json.js';
@@ -5,7 +6,8 @@ import {
   validarSintaxeCriacaoAtividade,
   validarQuantidadeEncontros,
   validarEncontros,
-  validarCapacidadeSala
+  validarCapacidadeSala,
+  validarConflitoSala
 } from '../validacoes/atividade.js';
 
 export function criarRotasAtividades({ db, relogio }) {
@@ -42,6 +44,33 @@ export function criarRotasAtividades({ db, relogio }) {
         erro: validacaoCapacidade.erro,
         mensagem: validacaoCapacidade.mensagem
       });
+    }
+
+    const validacaoConflito = validarConflitoSala(db, req.body.salaId, req.body.encontros);
+    if (!validacaoConflito.valido) {
+      return res.status(409).json({
+        erro: validacaoConflito.erro,
+        mensagem: validacaoConflito.mensagem
+      });
+    }
+
+    const atividadeId = `atv_${crypto.randomBytes(4).toString('hex')}`;
+    const criadaEm = relogio.obterAgora();
+
+    db.prepare(`
+      INSERT INTO atividades (id, titulo, tipo, sala_id, vagas, cancelada, criada_em)
+      VALUES (?, ?, ?, ?, ?, 0, ?)
+    `).run(atividadeId, req.body.titulo, req.body.tipo, req.body.salaId, req.body.vagas, criadaEm);
+
+    const insereEncontro = db.prepare(`
+      INSERT INTO encontros (id, atividade_id, inicio, fim, ordem)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (let i = 0; i < req.body.encontros.length; i++) {
+      const enc = req.body.encontros[i];
+      const encId = `enc_${crypto.randomBytes(4).toString('hex')}`;
+      insereEncontro.run(encId, atividadeId, enc.inicio, enc.fim, i);
     }
 
     res.status(201).json({});

@@ -158,5 +158,42 @@ export function validarCapacidadeSala(vagas, sala) {
   return { valido: true };
 }
 
+export function validarConflitoSala(db, salaId, encontros) {
+  const buscaEncontrosExistentes = db.prepare(`
+    SELECT e.inicio, e.fim
+    FROM encontros e
+    JOIN atividades a ON a.id = e.atividade_id
+    WHERE a.sala_id = ? AND a.cancelada = 0
+  `);
+
+  const existentes = buscaEncontrosExistentes.all(salaId);
+  const INTERVALO_MINIMO_MS = 15 * 60 * 1000;
+
+  for (const novo of encontros) {
+    const novoInicioMs = Date.parse(novo.inicio);
+    const novoFimMs = Date.parse(novo.fim);
+
+    for (const ex of existentes) {
+      const exInicioMs = Date.parse(ex.inicio);
+      const exFimMs = Date.parse(ex.fim);
+
+      const semConflito =
+        (novoFimMs + INTERVALO_MINIMO_MS <= exInicioMs) ||
+        (novoInicioMs >= exFimMs + INTERVALO_MINIMO_MS);
+
+      if (!semConflito) {
+        return {
+          valido: false,
+          erro: 'CONFLITO_DE_SALA',
+          mensagem: 'Conflito de horário ou intervalo inferior a 15 minutos na sala.'
+        };
+      }
+    }
+  }
+
+  return { valido: true };
+}
+
+
 
 

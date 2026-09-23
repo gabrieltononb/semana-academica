@@ -22,8 +22,10 @@ export const SALAS_INICIAIS = [
 
 export function resetarBanco(db) {
   db.exec(`
-    DROP TABLE IF EXISTS usuarios;
+    DROP TABLE IF EXISTS encontros;
+    DROP TABLE IF EXISTS atividades;
     DROP TABLE IF EXISTS salas;
+    DROP TABLE IF EXISTS usuarios;
 
     CREATE TABLE usuarios (
       id TEXT PRIMARY KEY,
@@ -35,6 +37,24 @@ export function resetarBanco(db) {
       id TEXT PRIMARY KEY,
       nome TEXT NOT NULL,
       capacidade INTEGER NOT NULL
+    );
+
+    CREATE TABLE atividades (
+      id TEXT PRIMARY KEY,
+      titulo TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      sala_id TEXT NOT NULL REFERENCES salas(id),
+      vagas INTEGER NOT NULL,
+      cancelada INTEGER NOT NULL DEFAULT 0,
+      criada_em TEXT NOT NULL
+    );
+
+    CREATE TABLE encontros (
+      id TEXT PRIMARY KEY,
+      atividade_id TEXT NOT NULL REFERENCES atividades(id),
+      inicio TEXT NOT NULL,
+      fim TEXT NOT NULL,
+      ordem INTEGER NOT NULL
     );
   `);
 
