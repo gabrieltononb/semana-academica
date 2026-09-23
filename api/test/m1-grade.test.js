@@ -1216,5 +1216,87 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(resGet.status, 200);
     assert.equal(resGet.body.titulo, 'Novo Título da Palestra');
   });
+
+  it('M1-R12: recusa reducao de vagas abaixo das ocupadas com 409 VAGAS_ABAIXO_DOS_INSCRITOS', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Concorrida',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 20,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Insere 10 confirmadas e 2 convocadas = 12 ocupadas
+    const insereUsuario = db.prepare('INSERT INTO usuarios (id, nome, papel) VALUES (?, ?, ?)');
+    for (let i = 1; i <= 12; i++) {
+      insereUsuario.run(`usr_teste_${i}`, `Participante Teste ${i}`, 'participante');
+    }
+
+    const insere = db.prepare(`
+      INSERT INTO inscricoes (id, atividade_id, participante_id, status, posicao_na_espera, convocada_ate, criada_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (let i = 1; i <= 10; i++) {
+      insere.run(`ins_conf_${i}`, atividadeId, `usr_teste_${i}`, 'confirmada', null, null, '2026-10-13T10:00:00-03:00');
+    }
+    insere.run('ins_conv_1', atividadeId, 'usr_teste_11', 'convocada', null, '2026-10-15T10:00:00-03:00', '2026-10-13T10:00:00-03:00');
+    insere.run('ins_conv_2', atividadeId, 'usr_teste_12', 'convocada', null, '2026-10-15T10:00:00-03:00', '2026-10-13T10:00:00-03:00');
+
+    // Tenta reduzir vagas para 10 (< 12)
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ vagas: 10 });
+
+    assert.equal(res.status, 409);
+    assert.equal(res.body.erro, 'VAGAS_ABAIXO_DOS_INSCRITOS');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R12: permite reducao de vagas quando valor for maior ou igual as vagas ocupadas com 200 OK', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra com Vagas Reduziveis',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Insere 5 confirmadas
+    const insereUsuario = db.prepare('INSERT INTO usuarios (id, nome, papel) VALUES (?, ?, ?)');
+    const insereInscricao = db.prepare(`
+      INSERT INTO inscricoes (id, atividade_id, participante_id, status, posicao_na_espera, convocada_ate, criada_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (let i = 1; i <= 5; i++) {
+      insereUsuario.run(`usr_red_${i}`, `User ${i}`, 'participante');
+      insereInscricao.run(`ins_red_${i}`, atividadeId, `usr_red_${i}`, 'confirmada', null, null, '2026-10-13T10:00:00-03:00');
+    }
+
+    // Reduz vagas de 30 para 10 (>= 5 ocupadas)
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ vagas: 10 });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.vagas, 10);
+    assert.equal(res.body.ocupadas, 5);
+    assert.equal(res.body.vagasRestantes, 5);
+  });
 });
 

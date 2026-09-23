@@ -173,6 +173,13 @@ export function criarRotasAtividades({ db, relogio }) {
     }
 
     if (req.body.vagas !== undefined) {
+      if (typeof req.body.vagas !== 'number' || !Number.isInteger(req.body.vagas) || req.body.vagas < 1) {
+        return res.status(422).json({
+          erro: 'DADOS_INVALIDOS',
+          mensagem: 'Vagas deve ser um número inteiro maior ou igual a 1.'
+        });
+      }
+
       const sala = db.prepare('SELECT id, capacidade FROM salas WHERE id = ?').get(atividade.sala_id);
       const validacaoCapacidade = validarCapacidadeSala(req.body.vagas, sala);
       if (!validacaoCapacidade.valido) {
@@ -181,6 +188,21 @@ export function criarRotasAtividades({ db, relogio }) {
           mensagem: validacaoCapacidade.mensagem
         });
       }
+
+      const contagemOcupadas = db.prepare(`
+        SELECT COUNT(*) AS total
+        FROM inscricoes
+        WHERE atividade_id = ? AND status IN ('confirmada', 'convocada')
+      `).get(atividade.id)?.total || 0;
+
+      if (req.body.vagas < contagemOcupadas) {
+        return res.status(409).json({
+          erro: 'VAGAS_ABAIXO_DOS_INSCRITOS',
+          mensagem: `Número de vagas (${req.body.vagas}) não pode ser inferior ao número de inscrições ocupadas (${contagemOcupadas}).`
+        });
+      }
+
+      db.prepare('UPDATE atividades SET vagas = ? WHERE id = ?').run(req.body.vagas, atividade.id);
     }
 
     if (req.body.titulo !== undefined) {
