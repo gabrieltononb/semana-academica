@@ -41,6 +41,23 @@ describe('Módulo 1 — Fatia 1: Infraestrutura e Salas', () => {
     assert.ok(res.body.agora);
   });
 
+  it('M1-R1: permite consultar e avançar relógio em modo de teste', async () => {
+    const resGet = await request(app).get('/_teste/relogio');
+    assert.equal(resGet.status, 200);
+    assert.equal(resGet.body.agora, '2026-10-13T09:00:00-03:00');
+
+    const novoInstante = '2026-10-19T10:00:00-03:00';
+    const resPut = await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: novoInstante });
+    assert.equal(resPut.status, 200);
+    assert.equal(resPut.body.agora, novoInstante);
+
+    const resGet2 = await request(app).get('/_teste/relogio');
+    assert.equal(resGet2.status, 200);
+    assert.equal(resGet2.body.agora, novoInstante);
+  });
+
   it('M1-R20: lista salas cadastradas de fábrica com seus dados', async () => {
     const res = await request(app)
       .get('/salas')
