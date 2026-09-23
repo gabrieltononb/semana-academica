@@ -410,5 +410,40 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
       });
     assert.equal(resFronteiraAntes.status, 201);
   });
+
+  it('M1-R10: gera identificadores, ordena encontros e calcula carga horaria', async () => {
+    const res = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso de TypeScript',
+        tipo: 'minicurso',
+        salaId: 'lab-3',
+        vagas: 20,
+        cargaHorariaMinutos: 999,
+        encontros: [
+          { inicio: '2026-10-20T14:00:00-03:00', fim: '2026-10-20T17:00:00-03:00' },
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T17:00:00-03:00' }
+        ]
+      });
+
+    assert.equal(res.status, 201);
+    assert.match(res.body.id, /^atv_[0-9a-f]{8}$/);
+    assert.equal(res.body.titulo, 'Minicurso de TypeScript');
+    assert.equal(res.body.tipo, 'minicurso');
+    assert.equal(res.body.salaId, 'lab-3');
+    assert.equal(res.body.vagas, 20);
+    assert.equal(res.body.cargaHorariaMinutos, 360);
+    assert.equal(res.body.situacao, 'prevista');
+    assert.equal(res.body.ocupadas, 0);
+    assert.equal(res.body.vagasRestantes, 20);
+    assert.equal(res.body.emEspera, 0);
+
+    assert.equal(res.body.encontros.length, 2);
+    assert.match(res.body.encontros[0].id, /^enc_[0-9a-f]{8}$/);
+    assert.match(res.body.encontros[1].id, /^enc_[0-9a-f]{8}$/);
+    assert.equal(res.body.encontros[0].inicio, '2026-10-19T14:00:00-03:00');
+    assert.equal(res.body.encontros[1].inicio, '2026-10-20T14:00:00-03:00');
+  });
 });
 

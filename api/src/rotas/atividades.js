@@ -7,7 +7,8 @@ import {
   validarQuantidadeEncontros,
   validarEncontros,
   validarCapacidadeSala,
-  validarConflitoSala
+  validarConflitoSala,
+  calcularSituacao
 } from '../validacoes/atividade.js';
 
 export function criarRotasAtividades({ db, relogio }) {
@@ -54,8 +55,24 @@ export function criarRotasAtividades({ db, relogio }) {
       });
     }
 
+    const encontrosOrdenados = [...req.body.encontros].sort((a, b) => {
+      return Date.parse(a.inicio) - Date.parse(b.inicio);
+    });
+
+    let cargaHorariaMinutos = 0;
+    const encontrosComId = encontrosOrdenados.map((enc) => {
+      const duracao = (Date.parse(enc.fim) - Date.parse(enc.inicio)) / 60000;
+      cargaHorariaMinutos += duracao;
+      return {
+        id: `enc_${crypto.randomBytes(4).toString('hex')}`,
+        inicio: enc.inicio,
+        fim: enc.fim
+      };
+    });
+
     const atividadeId = `atv_${crypto.randomBytes(4).toString('hex')}`;
     const criadaEm = relogio.obterAgora();
+    const situacao = calcularSituacao(criadaEm, encontrosComId, false);
 
     db.prepare(`
       INSERT INTO atividades (id, titulo, tipo, sala_id, vagas, cancelada, criada_em)
@@ -67,13 +84,24 @@ export function criarRotasAtividades({ db, relogio }) {
       VALUES (?, ?, ?, ?, ?)
     `);
 
-    for (let i = 0; i < req.body.encontros.length; i++) {
-      const enc = req.body.encontros[i];
-      const encId = `enc_${crypto.randomBytes(4).toString('hex')}`;
-      insereEncontro.run(encId, atividadeId, enc.inicio, enc.fim, i);
+    for (let i = 0; i < encontrosComId.length; i++) {
+      const enc = encontrosComId[i];
+      insereEncontro.run(enc.id, atividadeId, enc.inicio, enc.fim, i);
     }
 
-    res.status(201).json({});
+    res.status(201).json({
+      id: atividadeId,
+      titulo: req.body.titulo,
+      tipo: req.body.tipo,
+      salaId: req.body.salaId,
+      vagas: req.body.vagas,
+      encontros: encontrosComId,
+      cargaHorariaMinutos,
+      situacao,
+      ocupadas: 0,
+      vagasRestantes: req.body.vagas,
+      emEspera: 0
+    });
   });
 
   return router;

@@ -194,6 +194,19 @@ export function validarConflitoSala(db, salaId, encontros) {
   return { valido: true };
 }
 
+export function calcularSituacao(agoraIso, encontrosOrdenados, cancelada = false) {
+  if (cancelada) return 'cancelada';
+  if (!encontrosOrdenados || encontrosOrdenados.length === 0) return 'prevista';
 
+  const agoraMs = Date.parse(agoraIso);
+  const primeiroInicioMs = Date.parse(encontrosOrdenados[0].inicio);
+  const ultimoFimMs = Date.parse(encontrosOrdenados[encontrosOrdenados.length - 1].fim);
 
-
+  if (agoraMs < primeiroInicioMs) {
+    return 'prevista';
+  }
+  if (agoraMs >= primeiroInicioMs && agoraMs <= ultimoFimMs) {
+    return 'em_andamento';
+  }
+  return 'encerrada';
+}
