@@ -8,7 +8,8 @@ import {
   validarEncontros,
   validarCapacidadeSala,
   validarConflitoSala,
-  calcularSituacao
+  calcularSituacao,
+  obterDiaBrasilia
 } from '../validacoes/atividade.js';
 
 export function criarRotasAtividades({ db, relogio }) {
@@ -105,13 +106,26 @@ export function criarRotasAtividades({ db, relogio }) {
   });
 
   router.get('/', (req, res) => {
+    const { dia, tipo } = req.query;
     const atividades = db.prepare('SELECT * FROM atividades').all();
     const agoraIso = relogio.obterAgora();
 
-    const dtos = atividades.map((atividade) => {
+    let dtos = atividades.map((atividade) => {
       const encontros = db.prepare('SELECT id, inicio, fim, ordem FROM encontros WHERE atividade_id = ? ORDER BY inicio ASC').all(atividade.id);
       return montarAtividadeDTO(atividade, encontros, agoraIso, db);
     });
+
+    if (dia) {
+      dtos = dtos.filter((atv) => {
+        return atv.encontros.some((enc) => {
+          return obterDiaBrasilia(Date.parse(enc.inicio)) === dia;
+        });
+      });
+    }
+
+    if (tipo) {
+      dtos = dtos.filter((atv) => atv.tipo === tipo);
+    }
 
     dtos.sort((a, b) => {
       const inicioA = a.encontros[0] ? Date.parse(a.encontros[0].inicio) : 0;

@@ -626,5 +626,147 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
     assert.ok(cancelada);
     assert.equal(cancelada.situacao, 'cancelada');
   });
+
+  it('M1-R17: filtra atividades por dia no fuso de Brasilia', async () => {
+    // Atividade no dia 19/10/2026
+    const resDia19 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra da Segunda',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resDia19.status, 201);
+
+    // Atividade no dia 20/10/2026
+    const resDia20 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra da Terça',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-20T10:00:00-03:00', fim: '2026-10-20T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resDia20.status, 201);
+
+    // Consulta filtrando apenas o dia 20/10/2026
+    const res = await request(app)
+      .get('/atividades?dia=2026-10-20')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 1);
+    assert.equal(res.body[0].id, resDia20.body.id);
+    assert.equal(res.body[0].titulo, 'Palestra da Terça');
+  });
+
+  it('M1-R17: filtra atividades por tipo', async () => {
+    // Cria uma palestra
+    const resPalestra = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra de Arquitetura',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resPalestra.status, 201);
+
+    // Cria um minicurso
+    const resMinicurso = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso de Git',
+        tipo: 'minicurso',
+        salaId: 'lab-3',
+        vagas: 20,
+        encontros: [
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T17:00:00-03:00' },
+          { inicio: '2026-10-20T14:00:00-03:00', fim: '2026-10-20T17:00:00-03:00' }
+        ]
+      });
+    assert.equal(resMinicurso.status, 201);
+
+    // Consulta filtrando por tipo: minicurso
+    const res = await request(app)
+      .get('/atividades?tipo=minicurso')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 1);
+    assert.equal(res.body[0].id, resMinicurso.body.id);
+    assert.equal(res.body[0].tipo, 'minicurso');
+  });
+
+  it('M1-R17: combina filtros de dia e tipo simultaneamente', async () => {
+    // 1. Palestra na Segunda (19/10)
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra de Segunda',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+
+    // 2. Palestra na Terça (20/10)
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra de Terça',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-20T10:00:00-03:00', fim: '2026-10-20T12:00:00-03:00' }
+        ]
+      });
+
+    // 3. Minicurso com encontros na Terça (20/10) e Quarta (21/10)
+    const resMinicursoAlvo = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso de Rust',
+        tipo: 'minicurso',
+        salaId: 'lab-3',
+        vagas: 20,
+        encontros: [
+          { inicio: '2026-10-20T14:00:00-03:00', fim: '2026-10-20T17:00:00-03:00' },
+          { inicio: '2026-10-21T14:00:00-03:00', fim: '2026-10-21T17:00:00-03:00' }
+        ]
+      });
+    assert.equal(resMinicursoAlvo.status, 201);
+
+    // Consulta combinando dia=2026-10-20 e tipo=minicurso
+    const res = await request(app)
+      .get('/atividades?dia=2026-10-20&tipo=minicurso')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 1);
+    assert.equal(res.body[0].id, resMinicursoAlvo.body.id);
+    assert.equal(res.body[0].titulo, 'Minicurso de Rust');
+    assert.equal(res.body[0].tipo, 'minicurso');
+  });
 });
 
