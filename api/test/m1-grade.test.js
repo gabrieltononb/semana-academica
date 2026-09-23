@@ -91,5 +91,23 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(res.body.erro, 'SOMENTE_ORGANIZACAO');
     assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
   });
+
+  it('M1-R3: valida identificação e perfil antes da integridade do payload', async () => {
+    const res1 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'usr_inexistente')
+      .set('Content-Type', 'application/json')
+      .send('{ json_invalido:');
+    assert.equal(res1.status, 401);
+    assert.equal(res1.body.erro, 'USUARIO_DESCONHECIDO');
+
+    const res2 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'p-carla')
+      .set('Content-Type', 'application/json')
+      .send('{ json_invalido:');
+    assert.equal(res2.status, 403);
+    assert.equal(res2.body.erro, 'SOMENTE_ORGANIZACAO');
+  });
 });
 

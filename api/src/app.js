@@ -11,18 +11,6 @@ export function criarApp(opcoes = {}) {
   const db = opcoes.db || criarBanco(opcoes.database || ':memory:');
   const relogio = opcoes.relogio || criarRelogio();
 
-  app.use(express.json());
-
-  // Tratamento de corpo JSON inválido -> 422 DADOS_INVALIDOS
-  app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-      return res.status(422).json({
-        erro: 'DADOS_INVALIDOS',
-        mensagem: 'Corpo da requisição não é um JSON válido.'
-      });
-    }
-    next(err);
-  });
 
   // Rotas de modo de teste (MODO_TESTE=1)
   if (process.env.MODO_TESTE === '1') {

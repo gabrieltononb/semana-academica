@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { resetarBanco } from '../banco.js';
 
 export function criarRotasTeste({ db, relogio }) {
   const router = Router();
+  router.use(express.json());
+
 
   router.post('/reset', (req, res) => {
     resetarBanco(db);
