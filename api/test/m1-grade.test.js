@@ -1097,6 +1097,28 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(res.body.mensagem, 'Atividade não encontrada.');
   });
 
+  it('M1-R3: confirma 404 NAO_ENCONTRADO antes de 422 CAMPO_NAO_EDITAVEL em PATCH para id inexistente', async () => {
+    // 1. Envia payload com campo não editável ('salaId') para ID inexistente
+    const resCampoNaoEditavel = await request(app)
+      .patch('/atividades/atv_inexistente')
+      .set('X-Usuario', 'org-ana')
+      .send({ salaId: 'auditorio' });
+
+    assert.equal(resCampoNaoEditavel.status, 404);
+    assert.equal(resCampoNaoEditavel.body.erro, 'NAO_ENCONTRADO');
+    assert.equal(resCampoNaoEditavel.body.mensagem, 'Atividade não encontrada.');
+
+    // 2. Envia JSON vazio {} para ID inexistente (critério de aceite 7)
+    const resVazio = await request(app)
+      .patch('/atividades/atv_inexistente')
+      .set('X-Usuario', 'org-ana')
+      .send({});
+
+    assert.equal(resVazio.status, 404);
+    assert.equal(resVazio.body.erro, 'NAO_ENCONTRADO');
+    assert.equal(resVazio.body.mensagem, 'Atividade não encontrada.');
+  });
+
   it('M1-R8: recusa alteracao de vagas acima da capacidade da sala com 422 VAGAS_ACIMA_DA_CAPACIDADE', async () => {
     const criacao = await request(app)
       .post('/atividades')
