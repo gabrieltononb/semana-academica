@@ -104,6 +104,27 @@ export function criarRotasAtividades({ db, relogio }) {
     });
   });
 
+  router.get('/', (req, res) => {
+    const atividades = db.prepare('SELECT * FROM atividades').all();
+    const agoraIso = relogio.obterAgora();
+
+    const dtos = atividades.map((atividade) => {
+      const encontros = db.prepare('SELECT id, inicio, fim, ordem FROM encontros WHERE atividade_id = ? ORDER BY inicio ASC').all(atividade.id);
+      return montarAtividadeDTO(atividade, encontros, agoraIso, db);
+    });
+
+    dtos.sort((a, b) => {
+      const inicioA = a.encontros[0] ? Date.parse(a.encontros[0].inicio) : 0;
+      const inicioB = b.encontros[0] ? Date.parse(b.encontros[0].inicio) : 0;
+      if (inicioA !== inicioB) {
+        return inicioA - inicioB;
+      }
+      return a.titulo.localeCompare(b.titulo);
+    });
+
+    res.json(dtos);
+  });
+
   router.get('/:id', (req, res) => {
     const atividade = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
     if (!atividade) {

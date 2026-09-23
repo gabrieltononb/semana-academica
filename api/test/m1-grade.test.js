@@ -2,6 +2,7 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { criarApp } from '../src/app.js';
+import { criarBanco } from '../src/banco.js';
 
 describe('Módulo 1 — Fatia 1: Infraestrutura e Salas', () => {
   let app;
@@ -449,10 +450,12 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
 
 describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => {
   let app;
+  let db;
 
   beforeEach(async () => {
     process.env.MODO_TESTE = '1';
-    app = criarApp({ database: ':memory:' });
+    db = criarBanco(':memory:');
+    app = criarApp({ db });
     await request(app).post('/_teste/reset');
   });
 
@@ -500,6 +503,128 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
     assert.equal(res.body.encontros.length, 1);
     assert.equal(res.body.encontros[0].inicio, '2026-10-19T10:00:00-03:00');
     assert.equal(res.body.encontros[0].fim, '2026-10-19T12:00:00-03:00');
+  });
+
+  it('M1-R16: lista todas as atividades ordenadas pelo inicio do primeiro encontro', async () => {
+    // Cria atividade 1 iniciando às 14:00
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra da Tarde',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T16:00:00-03:00' }
+        ]
+      });
+
+    // Cria atividade 2 iniciando às 10:00
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra da Manhã',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 40,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+
+    const res = await request(app)
+      .get('/atividades')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(Array.isArray(res.body), true);
+    assert.equal(res.body.length, 2);
+    assert.equal(res.body[0].titulo, 'Palestra da Manhã');
+    assert.equal(res.body[1].titulo, 'Palestra da Tarde');
+  });
+
+  it('M1-R16: desempata ordenacao por ordem alfabetica de titulo em caso de mesmo horario', async () => {
+    // Cria primeira atividade com título 'Workshop de Docker'
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Workshop de Docker',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 40,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+
+    // Cria segunda atividade no mesmo horário com título 'Arquitetura Limpa'
+    await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Arquitetura Limpa',
+        tipo: 'palestra',
+        salaId: 'sala-102',
+        vagas: 40,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+
+    const res = await request(app)
+      .get('/atividades')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 2);
+    assert.equal(res.body[0].titulo, 'Arquitetura Limpa');
+    assert.equal(res.body[1].titulo, 'Workshop de Docker');
+  });
+
+  it('M1-R16: inclui atividades canceladas na listagem', async () => {
+    const res1 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Normal',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 40,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(res1.status, 201);
+
+    const res2 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Desistida',
+        tipo: 'palestra',
+        salaId: 'sala-102',
+        vagas: 40,
+        encontros: [
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T16:00:00-03:00' }
+        ]
+      });
+    assert.equal(res2.status, 201);
+
+    // Simula cancelamento lógico no banco
+    db.prepare('UPDATE atividades SET cancelada = 1 WHERE id = ?').run(res2.body.id);
+
+    const res = await request(app)
+      .get('/atividades')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.length, 2);
+    const cancelada = res.body.find((a) => a.id === res2.body.id);
+    assert.ok(cancelada);
+    assert.equal(cancelada.situacao, 'cancelada');
   });
 });
 
