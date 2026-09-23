@@ -923,5 +923,94 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
     assert.equal(resDepois.status, 200);
     assert.equal(resDepois.body.situacao, 'cancelada');
   });
+
+  it('M1-R19: retorna metricas zeradas para atividade recem criada sem inscricoes', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Métricas Recém Criada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 200,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Consulta por ID
+    const resGet = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resGet.status, 200);
+    assert.equal(resGet.body.ocupadas, 0);
+    assert.equal(resGet.body.vagasRestantes, 200);
+    assert.equal(resGet.body.emEspera, 0);
+
+    // Consulta na listagem
+    const resList = await request(app)
+      .get('/atividades')
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resList.status, 200);
+    const item = resList.body.find((a) => a.id === atividadeId);
+    assert.ok(item);
+    assert.equal(item.ocupadas, 0);
+    assert.equal(item.vagasRestantes, 200);
+    assert.equal(item.emEspera, 0);
+  });
+
+  it('M1-R19: calcula ocupadas, vagasRestantes e emEspera a partir das inscricoes no banco', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra com Inscricoes',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Insere inscrições no banco com diferentes status
+    const insere = db.prepare(`
+      INSERT INTO inscricoes (id, atividade_id, participante_id, status, posicao_na_espera, convocada_ate, criada_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insere.run('ins_11111111', atividadeId, 'p-carla', 'confirmada', null, null, '2026-10-13T10:00:00-03:00');
+    insere.run('ins_22222222', atividadeId, 'p-diego', 'confirmada', null, null, '2026-10-13T10:05:00-03:00');
+    insere.run('ins_33333333', atividadeId, 'p-elisa', 'convocada', null, '2026-10-15T10:00:00-03:00', '2026-10-13T10:10:00-03:00');
+    insere.run('ins_44444444', atividadeId, 'p-fabio', 'cancelada', null, null, '2026-10-13T10:15:00-03:00');
+    insere.run('ins_55555555', atividadeId, 'p-gabriela', 'em_espera', 1, null, '2026-10-13T10:20:00-03:00');
+    insere.run('ins_66666666', atividadeId, 'p-heitor', 'em_espera', 2, null, '2026-10-13T10:25:00-03:00');
+
+    // Consulta por ID
+    const resGet = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(resGet.status, 200);
+    assert.equal(resGet.body.ocupadas, 3); // 2 confirmadas + 1 convocada
+    assert.equal(resGet.body.vagasRestantes, 47); // 50 - 3
+    assert.equal(resGet.body.emEspera, 2); // 2 em_espera
+
+    // Consulta na listagem
+    const resList = await request(app)
+      .get('/atividades')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(resList.status, 200);
+    const item = resList.body.find((a) => a.id === atividadeId);
+    assert.ok(item);
+    assert.equal(item.ocupadas, 3);
+    assert.equal(item.vagasRestantes, 47);
+    assert.equal(item.emEspera, 2);
+  });
 });
 
