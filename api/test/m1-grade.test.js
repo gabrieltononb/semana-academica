@@ -768,5 +768,160 @@ describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => 
     assert.equal(res.body[0].titulo, 'Minicurso de Rust');
     assert.equal(res.body[0].tipo, 'minicurso');
   });
+
+  it('M1-R18: calcula situacao como prevista quando relogio for anterior ao inicio do primeiro encontro', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Futura',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Posiciona relógio 1 minuto antes do início
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T09:59:00-03:00' });
+
+    const res = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.situacao, 'prevista');
+  });
+
+  it('M1-R18: calcula situacao como em_andamento quando relogio estiver entre inicio e fim dos encontros', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Em Andamento',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // 1. Exatamente no início do encontro (fronteira inferior inclusiva)
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T10:00:00-03:00' });
+    const resInicio = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resInicio.status, 200);
+    assert.equal(resInicio.body.situacao, 'em_andamento');
+
+    // 2. Durante o encontro
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T11:00:00-03:00' });
+    const resMeio = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resMeio.status, 200);
+    assert.equal(resMeio.body.situacao, 'em_andamento');
+
+    // 3. Exatamente no término do último encontro (fronteira superior inclusiva)
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T12:00:00-03:00' });
+    const resFim = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resFim.status, 200);
+    assert.equal(resFim.body.situacao, 'em_andamento');
+  });
+
+  it('M1-R18: calcula situacao como encerrada quando relogio for posterior ao fim do ultimo encontro', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Encerrada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Posiciona relógio 1 minuto após o término do encontro
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T12:01:00-03:00' });
+
+    const res = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.situacao, 'encerrada');
+  });
+
+  it('M1-R18: calcula situacao como cancelada independentemente do relogio', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Sempre Cancelada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Marca como cancelada
+    db.prepare('UPDATE atividades SET cancelada = 1 WHERE id = ?').run(atividadeId);
+
+    // 1. Relógio antes do início
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T08:00:00-03:00' });
+    const resAntes = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resAntes.status, 200);
+    assert.equal(resAntes.body.situacao, 'cancelada');
+
+    // 2. Relógio durante o encontro
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T11:00:00-03:00' });
+    const resDurante = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resDurante.status, 200);
+    assert.equal(resDurante.body.situacao, 'cancelada');
+
+    // 3. Relógio após o término
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T15:00:00-03:00' });
+    const resDepois = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+    assert.equal(resDepois.status, 200);
+    assert.equal(resDepois.body.situacao, 'cancelada');
+  });
 });
 
