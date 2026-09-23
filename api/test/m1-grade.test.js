@@ -314,5 +314,22 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(resSobrepostos.status, 422);
     assert.equal(resSobrepostos.body.erro, 'ENCONTRO_INVALIDO');
   });
+
+  it('M1-R8: recusa vagas acima da capacidade da sala', async () => {
+    const res = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Oficina de Hardware',
+        tipo: 'palestra',
+        salaId: 'lab-3',
+        vagas: 21,
+        encontros: [
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T16:00:00-03:00' }
+        ]
+      });
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'VAGAS_ACIMA_DA_CAPACIDADE');
+  });
 });
 

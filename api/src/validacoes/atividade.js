@@ -147,4 +147,16 @@ export function validarEncontros(encontros) {
   return { valido: true };
 }
 
+export function validarCapacidadeSala(vagas, sala) {
+  if (vagas > sala.capacidade) {
+    return {
+      valido: false,
+      erro: 'VAGAS_ACIMA_DA_CAPACIDADE',
+      mensagem: `Número de vagas (${vagas}) excede a capacidade da sala (${sala.capacidade}).`
+    };
+  }
+  return { valido: true };
+}
+
+
 

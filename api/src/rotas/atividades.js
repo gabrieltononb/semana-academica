@@ -4,7 +4,8 @@ import { tratarCorpoJson } from '../middleware/json.js';
 import {
   validarSintaxeCriacaoAtividade,
   validarQuantidadeEncontros,
-  validarEncontros
+  validarEncontros,
+  validarCapacidadeSala
 } from '../validacoes/atividade.js';
 
 export function criarRotasAtividades({ db, relogio }) {
@@ -32,6 +33,14 @@ export function criarRotasAtividades({ db, relogio }) {
       return res.status(422).json({
         erro: validacaoEncontros.erro,
         mensagem: validacaoEncontros.mensagem
+      });
+    }
+
+    const validacaoCapacidade = validarCapacidadeSala(req.body.vagas, validacaoSintaxe.sala);
+    if (!validacaoCapacidade.valido) {
+      return res.status(422).json({
+        erro: validacaoCapacidade.erro,
+        mensagem: validacaoCapacidade.mensagem
       });
     }
 
