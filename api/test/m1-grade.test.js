@@ -40,4 +40,18 @@ describe('Módulo 1 — Fatia 1: Infraestrutura e Salas', () => {
     assert.equal(res.status, 200);
     assert.ok(res.body.agora);
   });
+
+  it('M1-R20: lista salas cadastradas de fábrica com seus dados', async () => {
+    const res = await request(app)
+      .get('/salas')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, [
+      { id: 'auditorio', nome: 'Auditório Central', capacidade: 200 },
+      { id: 'sala-101', nome: 'Sala 101', capacidade: 40 },
+      { id: 'sala-102', nome: 'Sala 102', capacidade: 40 },
+      { id: 'lab-3', nome: 'Laboratório 3', capacidade: 20 }
+    ]);
+  });
 });
