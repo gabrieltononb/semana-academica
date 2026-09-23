@@ -275,7 +275,31 @@ export function criarRotasAtividades({ db, relogio }) {
       });
     }
 
-    res.json({});
+    const primeiroEncontro = db.prepare(`
+      SELECT inicio
+      FROM encontros
+      WHERE atividade_id = ?
+      ORDER BY inicio ASC
+      LIMIT 1
+    `).get(atividade.id);
+
+    if (primeiroEncontro) {
+      const agoraMs = Date.parse(relogio.obterAgora());
+      const inicioMs = Date.parse(primeiroEncontro.inicio);
+      if (agoraMs >= inicioMs) {
+        return res.status(422).json({
+          erro: 'ATIVIDADE_JA_INICIADA',
+          mensagem: 'Não é possível cancelar uma atividade que já foi iniciada.'
+        });
+      }
+    }
+
+    db.prepare('UPDATE atividades SET cancelada = 1 WHERE id = ?').run(atividade.id);
+
+    const atividadeAtualizada = db.prepare('SELECT * FROM atividades WHERE id = ?').get(atividade.id);
+    const encontros = db.prepare('SELECT id, inicio, fim, ordem FROM encontros WHERE atividade_id = ? ORDER BY inicio ASC').all(atividade.id);
+    const dto = montarAtividadeDTO(atividadeAtualizada, encontros, relogio.obterAgora(), db);
+    res.json(dto);
   });
 
   return router;

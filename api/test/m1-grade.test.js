@@ -1477,5 +1477,110 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(res.body.erro, 'ATIVIDADE_CANCELADA');
     assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
   });
+
+  it('M1-R15: recusa cancelamento no horario de inicio do primeiro encontro com 422 ATIVIDADE_JA_INICIADA', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Prestes a Iniciar',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Posiciona relógio exatamente no início do primeiro encontro
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T10:00:00-03:00' });
+
+    const res = await request(app)
+      .post(`/atividades/${atividadeId}/cancelamento`)
+      .set('X-Usuario', 'org-ana');
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'ATIVIDADE_JA_INICIADA');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R15: recusa cancelamento apos o inicio do primeiro encontro com 422 ATIVIDADE_JA_INICIADA', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Em Andamento para Cancelar',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Posiciona relógio 30 minutos após o início do primeiro encontro
+    await request(app)
+      .put('/_teste/relogio')
+      .send({ agora: '2026-10-19T10:30:00-03:00' });
+
+    const res = await request(app)
+      .post(`/atividades/${atividadeId}/cancelamento`)
+      .set('X-Usuario', 'org-ana');
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'ATIVIDADE_JA_INICIADA');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R15: cancela atividade antes do inicio com 200 OK e libera sala para nova atividade', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra a Ser Cancelada',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 50,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    // Relógio está em 2026-10-13T09:00:00-03:00 (antes do início)
+    const res = await request(app)
+      .post(`/atividades/${atividadeId}/cancelamento`)
+      .set('X-Usuario', 'org-ana');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.id, atividadeId);
+    assert.equal(res.body.situacao, 'cancelada');
+
+    // Confirma no banco de dados que a atividade está cancelada
+    const atvBanco = db.prepare('SELECT cancelada FROM atividades WHERE id = ?').get(atividadeId);
+    assert.equal(atvBanco.cancelada, 1);
+
+    // Cria nova atividade no mesmo horário e na mesma sala: deve ter sucesso (201)
+    const resNova = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Nova Palestra Substituta',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resNova.status, 201);
+  });
 });
 
