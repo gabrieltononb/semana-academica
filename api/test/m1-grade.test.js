@@ -1071,5 +1071,150 @@ describe('Módulo 1 — Fatia 4: Gestão, Alteração e Cancelamento de Atividad
     assert.equal(res.body.erro, 'VAGAS_ACIMA_DA_CAPACIDADE');
     assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
   });
+
+  it('M1-R11: recusa alteracao do campo salaId com 422 CAMPO_NAO_EDITAVEL', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Original',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ salaId: 'auditorio' });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'CAMPO_NAO_EDITAVEL');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R11: recusa alteracao do campo tipo com 422 CAMPO_NAO_EDITAVEL', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Original',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ tipo: 'minicurso' });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'CAMPO_NAO_EDITAVEL');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R11: recusa alteracao do campo encontros com 422 CAMPO_NAO_EDITAVEL', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Original',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({
+        encontros: [
+          { inicio: '2026-10-19T14:00:00-03:00', fim: '2026-10-19T16:00:00-03:00' }
+        ]
+      });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'CAMPO_NAO_EDITAVEL');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R11: recusa alteracao de campos calculados ou gerados com 422 CAMPO_NAO_EDITAVEL', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Original',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ cargaHorariaMinutos: 999 });
+
+    assert.equal(res.status, 422);
+    assert.equal(res.body.erro, 'CAMPO_NAO_EDITAVEL');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R11: permite alterar titulo preservando os demais campos com 200 OK', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Antiga',
+        tipo: 'palestra',
+        salaId: 'sala-101',
+        vagas: 30,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .patch(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana')
+      .send({ titulo: 'Novo Título da Palestra' });
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.id, atividadeId);
+    assert.equal(res.body.titulo, 'Novo Título da Palestra');
+    assert.equal(res.body.tipo, 'palestra');
+    assert.equal(res.body.salaId, 'sala-101');
+    assert.equal(res.body.vagas, 30);
+    assert.equal(res.body.encontros.length, 1);
+
+    // Consulta novamente por GET para verificar persistência
+    const resGet = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'org-ana');
+    assert.equal(resGet.status, 200);
+    assert.equal(resGet.body.titulo, 'Novo Título da Palestra');
+  });
 });
 

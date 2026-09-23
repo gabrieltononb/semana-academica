@@ -162,6 +162,16 @@ export function criarRotasAtividades({ db, relogio }) {
       });
     }
 
+    const camposPermitidos = new Set(['titulo', 'vagas']);
+    for (const chave of Object.keys(req.body)) {
+      if (!camposPermitidos.has(chave)) {
+        return res.status(422).json({
+          erro: 'CAMPO_NAO_EDITAVEL',
+          mensagem: `O campo '${chave}' não pode ser alterado.`
+        });
+      }
+    }
+
     if (req.body.vagas !== undefined) {
       const sala = db.prepare('SELECT id, capacidade FROM salas WHERE id = ?').get(atividade.sala_id);
       const validacaoCapacidade = validarCapacidadeSala(req.body.vagas, sala);
@@ -173,7 +183,20 @@ export function criarRotasAtividades({ db, relogio }) {
       }
     }
 
-    res.json({});
+    if (req.body.titulo !== undefined) {
+      if (typeof req.body.titulo !== 'string' || req.body.titulo.trim() === '') {
+        return res.status(422).json({
+          erro: 'DADOS_INVALIDOS',
+          mensagem: 'Título deve ser uma string não vazia.'
+        });
+      }
+      db.prepare('UPDATE atividades SET titulo = ? WHERE id = ?').run(req.body.titulo, atividade.id);
+    }
+
+    const atividadeAtualizada = db.prepare('SELECT * FROM atividades WHERE id = ?').get(atividade.id);
+    const encontros = db.prepare('SELECT id, inicio, fim, ordem FROM encontros WHERE atividade_id = ? ORDER BY inicio ASC').all(atividade.id);
+    const dto = montarAtividadeDTO(atividadeAtualizada, encontros, relogio.obterAgora(), db);
+    res.json(dto);
   });
 
   router.post('/:id/cancelamento', exigirOrganizacao, (req, res) => {
