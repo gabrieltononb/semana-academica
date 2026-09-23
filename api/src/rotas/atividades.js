@@ -104,5 +104,70 @@ export function criarRotasAtividades({ db, relogio }) {
     });
   });
 
+  router.get('/:id', (req, res) => {
+    const atividade = db.prepare('SELECT * FROM atividades WHERE id = ?').get(req.params.id);
+    if (!atividade) {
+      return res.status(404).json({
+        erro: 'NAO_ENCONTRADO',
+        mensagem: 'Atividade não encontrada.'
+      });
+    }
+
+    const encontros = db.prepare('SELECT id, inicio, fim, ordem FROM encontros WHERE atividade_id = ? ORDER BY inicio ASC').all(atividade.id);
+    const dto = montarAtividadeDTO(atividade, encontros, relogio.obterAgora(), db);
+    res.json(dto);
+  });
+
   return router;
+}
+
+export function montarAtividadeDTO(atividadeRow, encontrosRows, agoraIso, db) {
+  const encontrosOrdenados = [...encontrosRows].sort((a, b) => {
+    return Date.parse(a.inicio) - Date.parse(b.inicio);
+  });
+
+  let cargaHorariaMinutos = 0;
+  const encontrosFormatados = encontrosOrdenados.map((enc) => {
+    const duracao = (Date.parse(enc.fim) - Date.parse(enc.inicio)) / 60000;
+    cargaHorariaMinutos += duracao;
+    return {
+      id: enc.id,
+      inicio: enc.inicio,
+      fim: enc.fim
+    };
+  });
+
+  const situacao = calcularSituacao(agoraIso, encontrosFormatados, atividadeRow.cancelada === 1);
+
+  let ocupadas = 0;
+  let emEspera = 0;
+  const temInscricoes = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inscricoes'").get();
+  if (temInscricoes) {
+    const contagem = db.prepare(`
+      SELECT
+        SUM(CASE WHEN status IN ('confirmada', 'convocada') THEN 1 ELSE 0 END) AS ocupadas,
+        SUM(CASE WHEN status = 'em_espera' THEN 1 ELSE 0 END) AS em_espera
+      FROM inscricoes
+      WHERE atividade_id = ?
+    `).get(atividadeRow.id);
+
+    ocupadas = contagem?.ocupadas || 0;
+    emEspera = contagem?.em_espera || 0;
+  }
+
+  const vagasRestantes = Math.max(0, atividadeRow.vagas - ocupadas);
+
+  return {
+    id: atividadeRow.id,
+    titulo: atividadeRow.titulo,
+    tipo: atividadeRow.tipo,
+    salaId: atividadeRow.sala_id,
+    vagas: atividadeRow.vagas,
+    encontros: encontrosFormatados,
+    cargaHorariaMinutos,
+    situacao,
+    ocupadas,
+    vagasRestantes,
+    emEspera
+  };
 }

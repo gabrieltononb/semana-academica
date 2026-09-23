@@ -447,3 +447,59 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
   });
 });
 
+describe('Módulo 1 — Fatia 3: Consulta, Filtros e Dinâmica Temporal', () => {
+  let app;
+
+  beforeEach(async () => {
+    process.env.MODO_TESTE = '1';
+    app = criarApp({ database: ':memory:' });
+    await request(app).post('/_teste/reset');
+  });
+
+  it('M1-R4: recusa consulta de atividade inexistente com 404 NAO_ENCONTRADO', async () => {
+    const res = await request(app)
+      .get('/atividades/atv_inexistente')
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 404);
+    assert.equal(res.body.erro, 'NAO_ENCONTRADO');
+    assert.ok(res.body.mensagem, 'Deve conter mensagem descritiva');
+  });
+
+  it('M1-R4: retorna detalhes da atividade existente com 200 OK', async () => {
+    const criacao = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Introdução ao Node.js',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 150,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(criacao.status, 201);
+    const atividadeId = criacao.body.id;
+
+    const res = await request(app)
+      .get(`/atividades/${atividadeId}`)
+      .set('X-Usuario', 'p-carla');
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.id, atividadeId);
+    assert.equal(res.body.titulo, 'Introdução ao Node.js');
+    assert.equal(res.body.tipo, 'palestra');
+    assert.equal(res.body.salaId, 'auditorio');
+    assert.equal(res.body.vagas, 150);
+    assert.equal(res.body.cargaHorariaMinutos, 120);
+    assert.equal(res.body.situacao, 'prevista');
+    assert.equal(res.body.ocupadas, 0);
+    assert.equal(res.body.vagasRestantes, 150);
+    assert.equal(res.body.emEspera, 0);
+    assert.equal(res.body.encontros.length, 1);
+    assert.equal(res.body.encontros[0].inicio, '2026-10-19T10:00:00-03:00');
+    assert.equal(res.body.encontros[0].fim, '2026-10-19T12:00:00-03:00');
+  });
+});
+
