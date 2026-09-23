@@ -175,5 +175,61 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(resSemFuso.status, 422);
     assert.equal(resSemFuso.body.erro, 'DADOS_INVALIDOS');
   });
+
+  it('M1-R6: recusa quantidade incompativel de encontros por tipo', async () => {
+    // 1. Palestra com 2 encontros
+    const resPalestra2 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Longa',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' },
+          { inicio: '2026-10-20T10:00:00-03:00', fim: '2026-10-20T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resPalestra2.status, 422);
+    assert.equal(resPalestra2.body.erro, 'QUANTIDADE_DE_ENCONTROS');
+
+    // 2. Minicurso com 1 encontro
+    const resMinicurso1 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso Curto',
+        tipo: 'minicurso',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resMinicurso1.status, 422);
+    assert.equal(resMinicurso1.body.erro, 'QUANTIDADE_DE_ENCONTROS');
+
+    // 3. Minicurso com 6 encontros
+    const resMinicurso6 = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso Excessivo',
+        tipo: 'minicurso',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T08:00:00-03:00', fim: '2026-10-19T10:00:00-03:00' },
+          { inicio: '2026-10-19T10:30:00-03:00', fim: '2026-10-19T12:30:00-03:00' },
+          { inicio: '2026-10-20T08:00:00-03:00', fim: '2026-10-20T10:00:00-03:00' },
+          { inicio: '2026-10-20T10:30:00-03:00', fim: '2026-10-20T12:30:00-03:00' },
+          { inicio: '2026-10-21T08:00:00-03:00', fim: '2026-10-21T10:00:00-03:00' },
+          { inicio: '2026-10-21T10:30:00-03:00', fim: '2026-10-21T12:30:00-03:00' }
+        ]
+      });
+    assert.equal(resMinicurso6.status, 422);
+    assert.equal(resMinicurso6.body.erro, 'QUANTIDADE_DE_ENCONTROS');
+  });
 });
 

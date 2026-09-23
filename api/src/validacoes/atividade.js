@@ -50,3 +50,24 @@ export function validarSintaxeCriacaoAtividade(body, db) {
 
   return { valido: true, sala };
 }
+
+export function validarQuantidadeEncontros(tipo, encontros) {
+  if (tipo === 'palestra' && encontros.length !== 1) {
+    return {
+      valido: false,
+      erro: 'QUANTIDADE_DE_ENCONTROS',
+      mensagem: 'Atividade do tipo palestra deve ter exatamente 1 encontro.'
+    };
+  }
+
+  if (tipo === 'minicurso' && (encontros.length < 2 || encontros.length > 5)) {
+    return {
+      valido: false,
+      erro: 'QUANTIDADE_DE_ENCONTROS',
+      mensagem: 'Atividade do tipo minicurso deve ter entre 2 e 5 encontros.'
+    };
+  }
+
+  return { valido: true };
+}
+
