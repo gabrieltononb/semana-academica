@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import { exigirOrganizacao } from '../middleware/autorizacao.js';
 import { tratarCorpoJson } from '../middleware/json.js';
-import { validarSintaxeCriacaoAtividade, validarQuantidadeEncontros } from '../validacoes/atividade.js';
+import {
+  validarSintaxeCriacaoAtividade,
+  validarQuantidadeEncontros,
+  validarEncontros
+} from '../validacoes/atividade.js';
 
 export function criarRotasAtividades({ db, relogio }) {
   const router = Router();
@@ -20,6 +24,14 @@ export function criarRotasAtividades({ db, relogio }) {
       return res.status(422).json({
         erro: validacaoQtd.erro,
         mensagem: validacaoQtd.mensagem
+      });
+    }
+
+    const validacaoEncontros = validarEncontros(req.body.encontros);
+    if (!validacaoEncontros.valido) {
+      return res.status(422).json({
+        erro: validacaoEncontros.erro,
+        mensagem: validacaoEncontros.mensagem
       });
     }
 

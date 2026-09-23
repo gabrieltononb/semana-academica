@@ -71,3 +71,80 @@ export function validarQuantidadeEncontros(tipo, encontros) {
   return { valido: true };
 }
 
+export function obterDiaBrasilia(timestampMs) {
+  const offsetMs = -3 * 60 * 60 * 1000;
+  const d = new Date(timestampMs + offsetMs);
+  const ano = d.getUTCFullYear();
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+export function validarEncontros(encontros) {
+  const DIA_INICIO_EVENTO = '2026-10-19';
+  const DIA_FIM_EVENTO = '2026-10-23';
+
+  const intervalos = [];
+
+  for (const e of encontros) {
+    const inicioMs = Date.parse(e.inicio);
+    const fimMs = Date.parse(e.fim);
+
+    if (fimMs <= inicioMs) {
+      return {
+        valido: false,
+        erro: 'ENCONTRO_INVALIDO',
+        mensagem: 'O término do encontro deve ser posterior ao início.'
+      };
+    }
+
+    const duracaoMinutos = (fimMs - inicioMs) / 60000;
+    if (duracaoMinutos < 60 || duracaoMinutos > 240) {
+      return {
+        valido: false,
+        erro: 'ENCONTRO_INVALIDO',
+        mensagem: 'A duração do encontro deve ser entre 60 e 240 minutos.'
+      };
+    }
+
+    const diaInicio = obterDiaBrasilia(inicioMs);
+    const diaFim = obterDiaBrasilia(fimMs);
+
+    if (diaInicio !== diaFim) {
+      return {
+        valido: false,
+        erro: 'ENCONTRO_INVALIDO',
+        mensagem: 'O encontro deve iniciar e terminar no mesmo dia civil no horário de Brasília.'
+      };
+    }
+
+    if (diaInicio < DIA_INICIO_EVENTO || diaInicio > DIA_FIM_EVENTO) {
+      return {
+        valido: false,
+        erro: 'ENCONTRO_INVALIDO',
+        mensagem: 'O encontro deve ocorrer durante o período oficial do evento (19 a 23/10/2026).'
+      };
+    }
+
+    intervalos.push({ inicioMs, fimMs });
+  }
+
+  // Verifica sobreposição interna entre encontros da mesma atividade
+  for (let i = 0; i < intervalos.length; i++) {
+    for (let j = i + 1; j < intervalos.length; j++) {
+      const a = intervalos[i];
+      const b = intervalos[j];
+      if (Math.max(a.inicioMs, b.inicioMs) < Math.min(a.fimMs, b.fimMs)) {
+        return {
+          valido: false,
+          erro: 'ENCONTRO_INVALIDO',
+          mensagem: 'Encontros da mesma atividade não podem possuir horários sobrepostos.'
+        };
+      }
+    }
+  }
+
+  return { valido: true };
+}
+
+

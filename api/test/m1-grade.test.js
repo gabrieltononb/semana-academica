@@ -231,5 +231,88 @@ describe('Módulo 1 — Fatia 2: Criação de Atividades', () => {
     assert.equal(resMinicurso6.status, 422);
     assert.equal(resMinicurso6.body.erro, 'QUANTIDADE_DE_ENCONTROS');
   });
+
+  it('M1-R7: recusa encontro com duracao invalida, fora do periodo, cruzando meia-noite ou sobreposto', async () => {
+    // 1. Duração inferior a 60 minutos (50 min)
+    const resDuracaoCurta = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Curta',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T10:50:00-03:00' }
+        ]
+      });
+    assert.equal(resDuracaoCurta.status, 422);
+    assert.equal(resDuracaoCurta.body.erro, 'ENCONTRO_INVALIDO');
+
+    // 2. Duração superior a 240 minutos (250 min)
+    const resDuracaoLonga = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Longa Demais',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T14:10:00-03:00' }
+        ]
+      });
+    assert.equal(resDuracaoLonga.status, 422);
+    assert.equal(resDuracaoLonga.body.erro, 'ENCONTRO_INVALIDO');
+
+    // 3. Cruzando a meia-noite no fuso de Brasília
+    const resCruzaMeiaNoite = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra Noturna',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T23:00:00-03:00', fim: '2026-10-20T00:30:00-03:00' }
+        ]
+      });
+    assert.equal(resCruzaMeiaNoite.status, 422);
+    assert.equal(resCruzaMeiaNoite.body.erro, 'ENCONTRO_INVALIDO');
+
+    // 4. Fora do período oficial (ex: 18/10/2026 ou 24/10/2026)
+    const resForaPeriodo = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Palestra no Domingo',
+        tipo: 'palestra',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-18T10:00:00-03:00', fim: '2026-10-18T12:00:00-03:00' }
+        ]
+      });
+    assert.equal(resForaPeriodo.status, 422);
+    assert.equal(resForaPeriodo.body.erro, 'ENCONTRO_INVALIDO');
+
+    // 5. Dois encontros da mesma atividade com sobreposição
+    const resSobrepostos = await request(app)
+      .post('/atividades')
+      .set('X-Usuario', 'org-ana')
+      .send({
+        titulo: 'Minicurso Sobreposto',
+        tipo: 'minicurso',
+        salaId: 'auditorio',
+        vagas: 100,
+        encontros: [
+          { inicio: '2026-10-19T10:00:00-03:00', fim: '2026-10-19T12:00:00-03:00' },
+          { inicio: '2026-10-19T11:30:00-03:00', fim: '2026-10-19T13:30:00-03:00' }
+        ]
+      });
+    assert.equal(resSobrepostos.status, 422);
+    assert.equal(resSobrepostos.body.erro, 'ENCONTRO_INVALIDO');
+  });
 });
 
