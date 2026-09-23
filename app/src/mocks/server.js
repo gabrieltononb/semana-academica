@@ -1,3 +1,1 @@
-import { setupServer } from 'msw/node';
-
-export const server = setupServer();
+export { server } from '../test/mocks/server.js';

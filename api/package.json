@@ -1,11 +1,10 @@
 {
   "name": "semana-academica-api",
   "version": "1.0.0",
-  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --test"
+    "test": "node --test test/**/*.test.js verificacoes/**/*.spec.js"
   },
   "dependencies": {
     "express": "^4.21.2"

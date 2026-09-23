@@ -1,8 +1,8 @@
-import { criarApp } from './app.js';
+const { criarServidor } = require('./servidor.js');
 
-const PORT = process.env.PORT || 3000;
-const app = criarApp();
+const porta = process.env.PORT || 3000;
+const app = criarServidor();
 
-app.listen(PORT, () => {
-  console.log(`API da Semana Acadêmica rodando na porta ${PORT}`);
+app.listen(porta, () => {
+  console.log(`API da Semana Acadêmica rodando na porta ${porta}`);
 });
